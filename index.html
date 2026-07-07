@@ -223,6 +223,34 @@
 
   ::-webkit-scrollbar{ width:0; height:0; }
 
+  /* retos / juegos */
+  .game-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .game-card{ background: var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 12px; text-align:center; cursor:pointer; }
+  .game-card .gi{ font-size:26px; margin-bottom:8px; }
+  .game-card .gt{ font-size:12.5px; font-weight:600; line-height:1.3; }
+  .game-card:active{ transform: scale(0.97); }
+
+  .duel-row{ display:flex; gap:10px; margin-top:10px; }
+  .duel-col{ flex:1; background: var(--surface); border:2px solid var(--border); border-radius:16px; overflow:hidden; cursor:pointer; text-align:center; }
+  .duel-col img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; }
+  .duel-col .dn{ font-size:12.5px; font-weight:600; padding:8px 8px 4px; line-height:1.25; }
+  .duel-col .dv{ font-size:16px; font-weight:700; color: var(--gold); padding:0 8px 10px; }
+  .duel-col.win{ border-color: var(--teal); }
+  .duel-col.lose{ border-color: var(--red); opacity:0.75; }
+  .duel-vs{ align-self:center; font-family:'Bebas Neue',sans-serif; font-size:20px; color: var(--text-muted); padding: 0 2px; }
+
+  .poster-crop{ width:200px; height:200px; margin: 6px auto 16px; border-radius:16px; overflow:hidden; border:1px solid var(--border); background-size:280%; background-repeat:no-repeat; }
+  .choice-list{ display:flex; flex-direction:column; gap:8px; }
+  .choice-btn{ background:var(--surface); border:1px solid var(--border); color:var(--text); padding:12px 14px; border-radius:10px; font-size:13px; text-align:left; cursor:pointer; font-family:inherit; }
+  .choice-btn.correct{ border-color: var(--teal); background: var(--teal-dim); }
+  .choice-btn.wrong{ border-color: var(--red); background: var(--red-dim); }
+
+  .person-col{ flex:1; background: var(--surface); border:2px solid var(--border); border-radius:16px; overflow:hidden; cursor:pointer; text-align:center; }
+  .person-col img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; background:var(--surface-2); }
+
+  .streak-badge{ display:inline-flex; align-items:center; gap:6px; background: var(--gold-dim); color: var(--gold); font-size:12px; font-weight:600; padding:5px 12px; border-radius:20px; margin-bottom:10px; }
+
+
   /* escritorio / pantallas anchas: tarjeta horizontal, mejor uso del espacio */
   @media (min-width: 760px){
     #app{ max-width: 760px; }
@@ -284,6 +312,13 @@ let state = {
   topList: null,
   topMode: 'rated',
   trendingList: null,
+  gamePool: null,
+  peoplePool: null,
+  gameScreen: 'hub',
+  duel: null,
+  posterGame: null,
+  starDuel: null,
+  streak: 0,
   error: ''
 };
 
@@ -292,8 +327,11 @@ function loadStorage(){
   if(s){ state.apiKey = s.apiKey||''; state.platforms = s.platforms||[]; state.providerIds = s.providerIds||{}; }
   const t = storeGet('taste');
   if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; }
+  const g = storeGet('gameStreak');
+  if(typeof g === 'number') state.streak = g;
   recomputeGenreScores();
 }
+function saveStreak(){ storeSet('gameStreak', state.streak); }
 function saveSettings(){ storeSet('settings', {apiKey: state.apiKey, platforms: state.platforms, providerIds: state.providerIds}); }
 function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked}); }
 
@@ -480,6 +518,7 @@ function render(){
   if(state.screen === 'quiz') return renderQuiz();
   if(state.screen === 'swipe') return renderSwipe();
   if(state.screen === 'top') return renderTop();
+  if(state.screen === 'games') return renderGames();
   if(state.screen === 'mylist') return renderMyList();
 }
 
@@ -693,6 +732,7 @@ async function openDetail(movie){
 
 /* ---------- Top Películas ---------- */
 async function renderTop(){
+  app.innerHTML = '';
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Top películas</div>`));
 
@@ -760,6 +800,7 @@ function paintTopList(container, list){
 
 /* ---------- Mi lista ---------- */
 function renderMyList(){
+  app.innerHTML = '';
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Mi lista</div>`));
 
@@ -839,6 +880,7 @@ function appendBottomNav(active){
   const items = [
     { key: 'swipe', icon: '🎬', label: 'Descubrir' },
     { key: 'top', icon: '★', label: 'Top' },
+    { key: 'games', icon: '🎯', label: 'Retos' },
     { key: 'mylist', icon: '☰', label: 'Mi lista' }
   ];
   items.forEach(it => {
@@ -853,6 +895,255 @@ function appendBottomNav(active){
   nav.appendChild(inner);
   app.appendChild(nav);
 }
+
+/* ---------- Retos: motor de datos ---------- */
+const DUEL_METRICS = [
+  { key:'popularity', label:'¿Cuál es más popular?', needsDetail:false, format:v=>Math.round(v), better:(a,b)=>a>b },
+  { key:'vote_average', label:'¿Cuál tiene mejor nota?', needsDetail:false, format:v=>(v||0).toFixed(1), better:(a,b)=>a>b },
+  { key:'vote_count', label:'¿Cuál recibió más votos?', needsDetail:false, format:v=>(v||0).toLocaleString('es-ES'), better:(a,b)=>a>b },
+  { key:'release_date', label:'¿Cuál es más antigua?', needsDetail:false, format:v=>v?v.slice(0,4):'?', better:(a,b)=>a<b },
+  { key:'runtime', label:'¿Cuál dura más?', needsDetail:true, format:v=>v?v+' min':'—', better:(a,b)=>a>b },
+  { key:'budget', label:'¿Cuál costó más producir?', needsDetail:true, format:v=>v?'$'+v.toLocaleString('es-ES'):'Sin datos', better:(a,b)=>a>b },
+  { key:'revenue', label:'¿Cuál recaudó más dinero?', needsDetail:true, format:v=>v?'$'+v.toLocaleString('es-ES'):'Sin datos', better:(a,b)=>a>b },
+];
+
+async function ensureGamePool(){
+  if(state.gamePool && state.gamePool.length >= 30) return;
+  const [p1, p2] = await Promise.all([
+    tmdb('/movie/popular', { language:'es-ES', page:1 }),
+    tmdb('/movie/popular', { language:'es-ES', page:2 })
+  ]);
+  state.gamePool = [...(p1.results||[]), ...(p2.results||[])].filter(m=>m.poster_path);
+}
+async function ensurePeoplePool(){
+  if(state.peoplePool && state.peoplePool.length >= 30) return;
+  const [p1, p2] = await Promise.all([
+    tmdb('/person/popular', { language:'es-ES', page:1 }),
+    tmdb('/person/popular', { language:'es-ES', page:2 })
+  ]);
+  state.peoplePool = [...(p1.results||[]), ...(p2.results||[])].filter(p=>p.profile_path);
+}
+function pickTwoDistinct(arr){
+  const a = arr[Math.floor(Math.random()*arr.length)];
+  let b; let guard=0;
+  do{ b = arr[Math.floor(Math.random()*arr.length)]; guard++; } while(b.id === a.id && guard < 30);
+  return [a,b];
+}
+
+function renderGames(){
+  if(state.gameScreen === 'duel') return renderDuelScreen();
+  if(state.gameScreen === 'poster') return renderPosterScreen();
+  if(state.gameScreen === 'stars') return renderStarDuelScreen();
+  return renderGamesHub();
+}
+
+function renderGamesHub(){
+  const wrap = el('div');
+  wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Retos</div>`));
+  if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
+  wrap.appendChild(el('p','lead','Pon a prueba lo que sabes de cine, con datos reales de TMDB.'));
+
+  const games = [
+    { icon:'📊', title:'Duelo de datos', action: () => startDuel() },
+    { icon:'🖼️', title:'Adivina el póster', action: () => startPosterGame() },
+    { icon:'🎭', title:'Actor vs Actor', action: () => startStarDuel('acting') },
+    { icon:'🎬', title:'Director vs Director', action: () => startStarDuel('directing') },
+    { icon:'🎲', title:'Ruleta sorpresa', action: () => spinRoulette() },
+  ];
+  const grid = el('div','game-grid');
+  games.forEach(g => {
+    const card = el('div','game-card', `<div class="gi">${g.icon}</div><div class="gt">${g.title}</div>`);
+    card.onclick = g.action;
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+  app.appendChild(wrap);
+  appendBottomNav('games');
+}
+
+async function startDuel(){
+  state.gameScreen = 'duel';
+  state.duel = { loading:true };
+  render();
+  try{
+    await ensureGamePool();
+    let [a,b] = pickTwoDistinct(state.gamePool);
+    const metric = DUEL_METRICS[Math.floor(Math.random()*DUEL_METRICS.length)];
+    if(metric.needsDetail){
+      const [da,db] = await Promise.all([ tmdb(`/movie/${a.id}`,{language:'es-ES'}), tmdb(`/movie/${b.id}`,{language:'es-ES'}) ]);
+      a = { ...a, ...da }; b = { ...b, ...db };
+    }
+    state.duel = { a, b, metric, answered:false };
+  }catch(e){ state.duel = { error:true }; }
+  render();
+}
+
+function renderDuelScreen(){
+  const wrap = el('div');
+  const header = el('div','marquee');
+  header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Duelo de datos</div><div class="icon-btn" id="back-hub">←</div>`;
+  wrap.appendChild(header);
+
+  const d = state.duel || {};
+  if(d.loading){ wrap.appendChild(el('p','lead','Buscando dos películas...')); }
+  else if(d.error){ wrap.appendChild(el('p','lead','No se ha podido cargar el duelo, prueba de nuevo.')); }
+  else if(d.a && d.b){
+    if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
+    wrap.appendChild(el('p','lead', d.metric.label));
+    const row = el('div','duel-row');
+    [d.a, d.b].forEach((m, idx) => {
+      const col = el('div','duel-col' + (d.answered ? (isWinner(d, idx) ? ' win' : ' lose') : ''));
+      col.innerHTML = `<img src="${posterUrl(m.poster_path)}"><div class="dn">${m.title}</div>${d.answered ? `<div class="dv">${d.metric.format(m[d.metric.key])}</div>` : ''}`;
+      col.onclick = () => { if(!d.answered) answerDuel(idx); };
+      row.appendChild(col);
+    });
+    wrap.appendChild(row);
+    if(d.answered){
+      const btn = el('button','btn','Otro duelo');
+      btn.onclick = () => startDuel();
+      wrap.appendChild(btn);
+    }
+  }
+  app.appendChild(wrap);
+  appendBottomNav('games');
+  header.querySelector('#back-hub').onclick = () => { state.gameScreen = 'hub'; render(); };
+}
+function isWinner(d, idx){
+  const va = d.a[d.metric.key], vb = d.b[d.metric.key];
+  const aWins = d.metric.better(va, vb);
+  return idx === 0 ? aWins : !aWins;
+}
+function answerDuel(idx){
+  const d = state.duel;
+  d.answered = true;
+  if(isWinner(d, idx)){ state.streak += 1; } else { state.streak = 0; }
+  saveStreak();
+  render();
+}
+
+async function startPosterGame(){
+  state.gameScreen = 'poster';
+  state.posterGame = { loading:true };
+  render();
+  try{
+    await ensureGamePool();
+    const pool = state.gamePool;
+    const answer = pool[Math.floor(Math.random()*pool.length)];
+    const distractors = [];
+    while(distractors.length < 3){
+      const c = pool[Math.floor(Math.random()*pool.length)];
+      if(c.id !== answer.id && !distractors.find(x=>x.id===c.id)) distractors.push(c);
+    }
+    const options = [answer, ...distractors].sort(() => Math.random()-0.5);
+    const pos = `${20+Math.random()*50}% ${20+Math.random()*50}%`;
+    state.posterGame = { answer, options, pos, answered:false };
+  }catch(e){ state.posterGame = { error:true }; }
+  render();
+}
+function renderPosterScreen(){
+  const wrap = el('div');
+  const header = el('div','marquee');
+  header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Adivina el póster</div><div class="icon-btn" id="back-hub">←</div>`;
+  wrap.appendChild(header);
+
+  const g = state.posterGame || {};
+  if(g.loading){ wrap.appendChild(el('p','lead','Recortando un póster...')); }
+  else if(g.error){ wrap.appendChild(el('p','lead','No se ha podido cargar, prueba de nuevo.')); }
+  else if(g.answer){
+    if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
+    wrap.appendChild(el('p','lead','¿A qué película pertenece este fragmento?'));
+    const crop = el('div','poster-crop');
+    crop.style.backgroundImage = `url(${posterUrl(g.answer.poster_path)})`;
+    crop.style.backgroundPosition = g.pos;
+    wrap.appendChild(crop);
+    const list = el('div','choice-list');
+    g.options.forEach(opt => {
+      const btn = el('div','choice-btn' + (g.answered ? (opt.id===g.answer.id ? ' correct' : (opt.id===g.picked ? ' wrong' : '')) : ''), opt.title);
+      btn.onclick = () => {
+        if(g.answered) return;
+        g.answered = true; g.picked = opt.id;
+        if(opt.id === g.answer.id){ state.streak += 1; } else { state.streak = 0; }
+        saveStreak();
+        render();
+      };
+      list.appendChild(btn);
+    });
+    wrap.appendChild(list);
+    if(g.answered){
+      const btn = el('button','btn','Otra ronda');
+      btn.onclick = () => startPosterGame();
+      wrap.appendChild(btn);
+    }
+  }
+  app.appendChild(wrap);
+  appendBottomNav('games');
+  header.querySelector('#back-hub').onclick = () => { state.gameScreen = 'hub'; render(); };
+}
+
+async function startStarDuel(department){
+  state.gameScreen = 'stars';
+  state.starDuel = { loading:true, department };
+  render();
+  try{
+    await ensurePeoplePool();
+    const pool = state.peoplePool.filter(p => p.known_for_department === (department === 'acting' ? 'Acting' : 'Directing'));
+    const usable = pool.length >= 2 ? pool : state.peoplePool;
+    const [a,b] = pickTwoDistinct(usable);
+    state.starDuel = { a, b, department, answered:false };
+  }catch(e){ state.starDuel = { error:true, department }; }
+  render();
+}
+function renderStarDuelScreen(){
+  const wrap = el('div');
+  const title = state.starDuel && state.starDuel.department === 'directing' ? 'Director vs Director' : 'Actor vs Actor';
+  const header = el('div','marquee');
+  header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">${title}</div><div class="icon-btn" id="back-hub">←</div>`;
+  wrap.appendChild(header);
+
+  const d = state.starDuel || {};
+  if(d.loading){ wrap.appendChild(el('p','lead','Buscando dos perfiles...')); }
+  else if(d.error){ wrap.appendChild(el('p','lead','No se ha podido cargar, prueba de nuevo.')); }
+  else if(d.a && d.b){
+    if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
+    wrap.appendChild(el('p','lead','¿Quién es más popular ahora mismo en TMDB?'));
+    const row = el('div','duel-row');
+    [d.a, d.b].forEach((p, idx) => {
+      const aWins = d.a.popularity > d.b.popularity;
+      const winnerIdx = aWins ? 0 : 1;
+      const col = el('div','person-col' + (d.answered ? (idx===winnerIdx ? ' win' : ' lose') : ''));
+      col.innerHTML = `<img src="${p.profile_path ? posterUrl(p.profile_path) : ''}"><div class="dn">${p.name}</div>${d.answered ? `<div class="dv">${Math.round(p.popularity)}</div>` : ''}`;
+      col.onclick = () => {
+        if(d.answered) return;
+        d.answered = true;
+        if(idx === winnerIdx){ state.streak += 1; } else { state.streak = 0; }
+        saveStreak();
+        render();
+      };
+      row.appendChild(col);
+    });
+    wrap.appendChild(row);
+    if(d.answered){
+      const btn = el('button','btn','Otro duelo');
+      btn.onclick = () => startStarDuel(d.department);
+      wrap.appendChild(btn);
+    }
+  }
+  app.appendChild(wrap);
+  appendBottomNav('games');
+  header.querySelector('#back-hub').onclick = () => { state.gameScreen = 'hub'; render(); };
+}
+
+async function spinRoulette(){
+  try{
+    await ensureQueue();
+    const pool = state.queue.length ? state.queue : (state.gamePool || []);
+    if(!pool.length){ await ensureGamePool(); }
+    const finalPool = pool.length ? pool : state.gamePool;
+    const pick = finalPool[Math.floor(Math.random()*finalPool.length)];
+    openDetail(pick);
+  }catch(e){}
+}
+
 
 /* ---------- arranque ---------- */
 (async function init(){
