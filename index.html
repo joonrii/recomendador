@@ -6,6 +6,16 @@
 <title>Sesión continua — descubre qué ver</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Google tag (gtag.js) — sustituye G-XXXXXXXXXX por tu Measurement ID real de GA4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
+
 <style>
   :root{
     --bg: #121319;
@@ -26,9 +36,8 @@
   html,body{ margin:0; padding:0; min-height:100%; }
   body{
     background:
-      radial-gradient(circle at 12% -8%, #E8B23D26, transparent 42%),
-      radial-gradient(circle at 92% 6%, #2E9C8F22, transparent 40%),
-      radial-gradient(circle at 50% 115%, #7C6CE826, transparent 55%),
+      radial-gradient(700px circle at 88% 8%, #7C6CE83d, transparent 60%),
+      radial-gradient(600px circle at 8% 96%, #E8B23D2e, transparent 55%),
       var(--bg);
     background-attachment: fixed;
     color: var(--text);
@@ -42,6 +51,14 @@
   body::before{
     content:""; position:fixed; inset:0; pointer-events:none; opacity:0.05; mix-blend-mode:overlay; z-index:1;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  #grid-layer{
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(to right, #ffffff0d 1px, transparent 1px),
+      linear-gradient(to bottom, #ffffff0d 1px, transparent 1px);
+    background-size: 5rem 4rem;
+    mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 75%);
   }
   #backdrop-layer{
     position:fixed; inset:-4%; z-index:0; background-size:cover; background-position:center;
@@ -250,6 +267,32 @@
 
   .streak-badge{ display:inline-flex; align-items:center; gap:6px; background: var(--gold-dim); color: var(--gold); font-size:12px; font-weight:600; padding:5px 12px; border-radius:20px; margin-bottom:10px; }
 
+  .game-question{
+    font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:0.03em; color:#fff;
+    background: var(--surface); border:1px solid var(--gold); border-radius:14px; padding:16px 14px;
+    text-align:center; margin-bottom:12px; box-shadow: 0 0 24px #E8B23D22;
+  }
+  .result-banner{
+    text-align:center; font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:0.04em;
+    padding:14px; border-radius:14px; margin: 12px 0; animation: pop .3s ease;
+  }
+  .result-banner.win{ background: var(--teal-dim); color: var(--teal); border:2px solid var(--teal); }
+  .result-banner.lose{ background: var(--red-dim); color: var(--red); border:2px solid var(--red); }
+  @keyframes pop{ from{ transform:scale(0.88); opacity:0; } to{ transform:scale(1); opacity:1; } }
+
+  .duel-col, .person-col{ position:relative; }
+  .duel-col.win, .person-col.win{ border-color: var(--teal); box-shadow: 0 0 18px #2E9C8F44; }
+  .duel-col.lose, .person-col.lose{ border-color: var(--red); opacity:0.5; filter: grayscale(0.5); }
+  .duel-col.win::after, .person-col.win::after{
+    content:"✓"; position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:50%;
+    background: var(--teal); color:#0B211D; font-weight:800; font-size:16px;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.5); z-index:2;
+  }
+  .duel-col.lose::after, .person-col.lose::after{
+    content:"✕"; position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:50%;
+    background: var(--red); color:#2B0D0C; font-weight:800; font-size:16px;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.5); z-index:2;
+  }
 
   /* escritorio / pantallas anchas: tarjeta horizontal, mejor uso del espacio */
   @media (min-width: 760px){
@@ -271,6 +314,7 @@
 </style>
 </head>
 <body>
+<div id="grid-layer"></div>
 <div id="backdrop-layer"></div>
 <div id="backdrop-vignette"></div>
 <div id="app"></div>
@@ -296,7 +340,6 @@ const PROVIDER_QUERY = {
 
 let state = {
   screen: 'loading',
-  apiKey: '',
   region: 'US',
   platforms: [],
   providerIds: {},
@@ -324,7 +367,7 @@ let state = {
 
 function loadStorage(){
   const s = storeGet('settings');
-  if(s){ state.apiKey = s.apiKey||''; state.platforms = s.platforms||[]; state.providerIds = s.providerIds||{}; }
+  if(s){ state.platforms = s.platforms||[]; state.providerIds = s.providerIds||{}; }
   const t = storeGet('taste');
   if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; }
   const g = storeGet('gameStreak');
@@ -332,7 +375,7 @@ function loadStorage(){
   recomputeGenreScores();
 }
 function saveStreak(){ storeSet('gameStreak', state.streak); }
-function saveSettings(){ storeSet('settings', {apiKey: state.apiKey, platforms: state.platforms, providerIds: state.providerIds}); }
+function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); }
 function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked}); }
 
 function recomputeGenreScores(){
@@ -344,17 +387,15 @@ function recomputeGenreScores(){
   state.genreScores = scores;
 }
 
-/* ---------- TMDB ---------- */
-const TMDB = 'https://api.themoviedb.org/3';
-
+/* ---------- TMDB (a través de nuestro proxy de Vercel, sin clave en el navegador) ---------- */
 async function tmdb(path, params={}){
-  const url = new URL(TMDB + path);
-  url.searchParams.set('api_key', state.apiKey);
+  const url = new URL(window.location.origin + '/api/tmdb');
+  url.searchParams.set('path', path);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
   let res;
   try{ res = await fetch(url.toString()); }
   catch(networkErr){ const e = new Error('NETWORK_OR_CORS'); e.kind = 'network'; throw e; }
-  if(!res.ok){ const e = new Error('TMDB_ERROR_' + res.status); e.kind = res.status === 401 ? 'invalid_key' : 'http_' + res.status; throw e; }
+  if(!res.ok){ const e = new Error('TMDB_ERROR_' + res.status); e.kind = 'http_' + res.status; throw e; }
   return res.json();
 }
 
@@ -513,7 +554,7 @@ function render(){
   app.innerHTML = '';
   if(state.screen !== 'swipe' && state.screen !== 'quiz'){ setBackdrop(null); }
   if(state.screen === 'loading') return renderLoading();
-  if(state.screen === 'setup') return renderSetup();
+  if(state.screen === 'startup-error') return renderStartupError();
   if(state.screen === 'platforms') return renderPlatforms();
   if(state.screen === 'quiz') return renderQuiz();
   if(state.screen === 'swipe') return renderSwipe();
@@ -527,38 +568,13 @@ function renderLoading(){
   app.appendChild(el('p','lead','Cargando...'));
 }
 
-function renderSetup(){
+function renderStartupError(){
   const wrap = el('div');
-  wrap.appendChild(el('div','marquee', `<div class="display marquee-title">Sesión continua</div><div class="marquee-lights"><span></span><span></span><span></span></div>`));
-  wrap.appendChild(el('p','lead','Para traer pósters y catálogos reales necesitamos una clave gratuita de TMDB (The Movie Database). Crea una cuenta en themoviedb.org → Ajustes → API → "API key (v3 auth)".'));
-  wrap.appendChild(el('label','field-label','Tu clave de API de TMDB'));
-  const input = el('input'); input.type='text'; input.placeholder='Pega aquí tu API key'; input.value = state.apiKey;
-  wrap.appendChild(input);
-  if(state.error){ const err = el('p','lead', state.error); err.style.color = 'var(--red)'; wrap.appendChild(err); }
-  const btn = el('button','btn','Continuar');
-  btn.onclick = async () => {
-    const key = input.value.trim();
-    if(!key) return;
-    state.apiKey = key; state.error = '';
-    btn.textContent = 'Comprobando...';
-    try{
-      await verifyKeyAndLoadMeta();
-      saveSettings();
-      state.screen = 'platforms';
-      render();
-    }catch(e){
-      if(e.kind === 'network'){ state.error = 'La clave puede ser correcta, pero el navegador ha bloqueado la conexión con TMDB. Prueba a abrir https://api.themoviedb.org/3/movie/550?api_key=TU_CLAVE en una pestaña aparte.'; }
-      else if(e.kind === 'invalid_key'){ state.error = 'TMDB dice que la clave no es válida (401). Revisa espacios de más o que tu cuenta esté "Approved".'; }
-      else { state.error = 'Algo ha fallado al conectar con TMDB (' + e.message + ').'; }
-      btn.textContent = 'Continuar';
-      render();
-    }
-  };
+  wrap.appendChild(el('div','marquee', `<div class="display marquee-title">Sesión continua</div>`));
+  wrap.appendChild(el('p','lead', state.error || 'No se ha podido conectar. Puede que el servidor esté reiniciándose, prueba de nuevo en unos segundos.'));
+  const btn = el('button','btn','Reintentar');
+  btn.onclick = () => init();
   wrap.appendChild(btn);
-  const link = el('a','link','¿Dónde consigo la clave? →');
-  link.style.cssText = 'display:block; margin-top:14px; text-align:center;';
-  link.onclick = () => window.open('https://www.themoviedb.org/settings/api', '_blank');
-  wrap.appendChild(link);
   app.appendChild(wrap);
 }
 
@@ -989,7 +1005,7 @@ function renderDuelScreen(){
   else if(d.error){ wrap.appendChild(el('p','lead','No se ha podido cargar el duelo, prueba de nuevo.')); }
   else if(d.a && d.b){
     if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
-    wrap.appendChild(el('p','lead', d.metric.label));
+    wrap.appendChild(el('div','game-question', d.metric.label));
     const row = el('div','duel-row');
     [d.a, d.b].forEach((m, idx) => {
       const col = el('div','duel-col' + (d.answered ? (isWinner(d, idx) ? ' win' : ' lose') : ''));
@@ -999,6 +1015,7 @@ function renderDuelScreen(){
     });
     wrap.appendChild(row);
     if(d.answered){
+      wrap.appendChild(el('div', 'result-banner ' + (d.correct ? 'win' : 'lose'), d.correct ? '¡ACIERTO! 🎉' : 'FALLASTE'));
       const btn = el('button','btn','Otro duelo');
       btn.onclick = () => startDuel();
       wrap.appendChild(btn);
@@ -1016,7 +1033,8 @@ function isWinner(d, idx){
 function answerDuel(idx){
   const d = state.duel;
   d.answered = true;
-  if(isWinner(d, idx)){ state.streak += 1; } else { state.streak = 0; }
+  d.correct = isWinner(d, idx);
+  if(d.correct){ state.streak += 1; } else { state.streak = 0; }
   saveStreak();
   render();
 }
@@ -1051,7 +1069,7 @@ function renderPosterScreen(){
   else if(g.error){ wrap.appendChild(el('p','lead','No se ha podido cargar, prueba de nuevo.')); }
   else if(g.answer){
     if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
-    wrap.appendChild(el('p','lead','¿A qué película pertenece este fragmento?'));
+    wrap.appendChild(el('div','game-question', '¿A qué película pertenece este fragmento?'));
     const crop = el('div','poster-crop');
     crop.style.backgroundImage = `url(${posterUrl(g.answer.poster_path)})`;
     crop.style.backgroundPosition = g.pos;
@@ -1062,7 +1080,8 @@ function renderPosterScreen(){
       btn.onclick = () => {
         if(g.answered) return;
         g.answered = true; g.picked = opt.id;
-        if(opt.id === g.answer.id){ state.streak += 1; } else { state.streak = 0; }
+        g.correct = opt.id === g.answer.id;
+        if(g.correct){ state.streak += 1; } else { state.streak = 0; }
         saveStreak();
         render();
       };
@@ -1070,6 +1089,7 @@ function renderPosterScreen(){
     });
     wrap.appendChild(list);
     if(g.answered){
+      wrap.appendChild(el('div', 'result-banner ' + (g.correct ? 'win' : 'lose'), g.correct ? '¡ACIERTO! 🎉' : 'FALLASTE'));
       const btn = el('button','btn','Otra ronda');
       btn.onclick = () => startPosterGame();
       wrap.appendChild(btn);
@@ -1105,7 +1125,7 @@ function renderStarDuelScreen(){
   else if(d.error){ wrap.appendChild(el('p','lead','No se ha podido cargar, prueba de nuevo.')); }
   else if(d.a && d.b){
     if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
-    wrap.appendChild(el('p','lead','¿Quién es más popular ahora mismo en TMDB?'));
+    wrap.appendChild(el('div','game-question', '¿Quién es más popular ahora mismo en TMDB?'));
     const row = el('div','duel-row');
     [d.a, d.b].forEach((p, idx) => {
       const aWins = d.a.popularity > d.b.popularity;
@@ -1115,7 +1135,8 @@ function renderStarDuelScreen(){
       col.onclick = () => {
         if(d.answered) return;
         d.answered = true;
-        if(idx === winnerIdx){ state.streak += 1; } else { state.streak = 0; }
+        d.correct = idx === winnerIdx;
+        if(d.correct){ state.streak += 1; } else { state.streak = 0; }
         saveStreak();
         render();
       };
@@ -1123,6 +1144,7 @@ function renderStarDuelScreen(){
     });
     wrap.appendChild(row);
     if(d.answered){
+      wrap.appendChild(el('div', 'result-banner ' + (d.correct ? 'win' : 'lose'), d.correct ? '¡ACIERTO! 🎉' : 'FALLASTE'));
       const btn = el('button','btn','Otro duelo');
       btn.onclick = () => startStarDuel(d.department);
       wrap.appendChild(btn);
@@ -1146,18 +1168,22 @@ async function spinRoulette(){
 
 
 /* ---------- arranque ---------- */
-(async function init(){
+async function init(){
   loadStorage();
-  if(!state.apiKey){ state.screen = 'setup'; render(); return; }
+  state.screen = 'loading'; render();
   try{ await verifyKeyAndLoadMeta(); }
-  catch(e){ state.screen = 'setup'; state.error = 'Tu clave guardada ya no funciona, introdúcela de nuevo.'; render(); return; }
+  catch(e){
+    state.error = e.kind === 'network' ? 'No se ha podido conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.' : 'Ha ocurrido un problema al cargar los datos. Inténtalo de nuevo en unos segundos.';
+    state.screen = 'startup-error'; render(); return;
+  }
   if(!state.platforms.length){ state.screen = 'platforms'; render(); return; }
   state.screen = 'swipe';
   render();
   await ensureQueue();
   state.current = state.queue[0] || null;
   render();
-})();
+}
+init();
 </script>
 </body>
 </html>
