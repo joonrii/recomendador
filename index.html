@@ -206,7 +206,7 @@
   }
   .card-actions .round-btn.nope{ width:54px; height:54px; font-size:22px; background: var(--red); color:#2B0D0C; box-shadow:0 4px 14px #E1615C40; }
   .card-actions .round-btn.like{ width:54px; height:54px; font-size:22px; background: var(--teal); color:#0B211D; box-shadow:0 4px 14px #2E9C8F40; }
-  .card-actions .round-btn.skip{ width:44px; height:44px; font-size:17px; background: var(--surface-2); color: var(--text-muted); border:1px solid var(--border); }
+  .card-actions .round-btn.watchlist{ width:44px; height:44px; font-size:17px; background: var(--surface-2); color: var(--text-muted); border:1px solid var(--border); }
   .card-actions .round-btn.info{ width:44px; height:44px; font-size:15px; background: var(--surface-2); color: var(--gold); border:1px solid var(--border); }
   .round-btn:active{ transform: scale(0.9); }
 
@@ -340,10 +340,12 @@
     .card{ flex-direction: row; height: 500px; }
     .card-behind{ display:none; }
     .poster-wrap{ width: 334px; height: 100%; aspect-ratio: unset; flex-shrink:0; }
-    .card-body{ flex:1; overflow-y:auto; padding: 26px 30px; justify-content:center; }
+    .card-content{ flex:1; display:flex; flex-direction:column; min-height:0; }
+    .card-body{ flex:1; overflow-y:auto; padding: 22px 28px 6px; justify-content:center; }
+    .card-actions{ padding: 12px 28px 20px; justify-content:flex-start; }
     .card-title{ font-size: 32px; }
     .card-meta{ font-size:13px; }
-    .overview{ -webkit-line-clamp: 6; font-size:14px; }
+    .overview{ -webkit-line-clamp: 5; font-size:14px; }
     .cast-line{ font-size:13px; }
     .genre-pill{ font-size:12px; }
     .marquee-title{ font-size: 34px; }
@@ -388,7 +390,7 @@ let state = {
   current: null,
   liked: [],      // [{id,title,poster_path,genre_ids,vote_average,rating}]
   disliked: [],   // [{id,title}]
-  skipped: [],    // [{id,title}] — "no la he visto", neutro
+  watchlist: [],  // [{id,title,poster_path,genre_ids}] — "quiero verla"
   providerCache: {},
   lastSwipedMovie: null,
   genreScores: {},
@@ -412,14 +414,14 @@ function loadStorage(){
   const s = storeGet('settings');
   if(s){ state.platforms = s.platforms||[]; state.providerIds = s.providerIds||{}; }
   const t = storeGet('taste');
-  if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; state.skipped = t.skipped||[]; }
+  if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; state.watchlist = t.watchlist||[]; }
   const g = storeGet('gameStreak');
   if(typeof g === 'number') state.streak = g;
   recomputeGenreScores();
 }
 function saveStreak(){ storeSet('gameStreak', state.streak); }
 function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); }
-function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, skipped: state.skipped}); }
+function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist}); }
 
 function recomputeGenreScores(){
   const scores = {};
@@ -496,7 +498,7 @@ function topGenre(){
 }
 
 async function ensureQueue(){
-  const seen = new Set([...state.liked.map(m=>m.id), ...state.disliked.map(m=>m.id), ...state.skipped.map(m=>m.id), ...state.queue.map(m=>m.id)]);
+  const seen = new Set([...state.liked.map(m=>m.id), ...state.disliked.map(m=>m.id), ...state.watchlist.map(m=>m.id), ...state.queue.map(m=>m.id)]);
   let guard = 0;
   while(state.queue.length < 5 && guard < 20){
     guard++;
@@ -578,6 +580,8 @@ function buildCard(movie, onDecide, opts={}){
   posterWrap.insertAdjacentHTML('beforeend', `<div class="swipe-flag like">ME GUSTA</div><div class="swipe-flag nope">PASO</div>`);
   card.appendChild(posterWrap);
 
+  const content = document.createElement('div'); content.className = 'card-content';
+
   const body = document.createElement('div'); body.className = 'card-body';
   const year = (movie.release_date||'').slice(0,4);
   const genres = (movie.genre_ids||[]).slice(0,3).map(id => state.genreMap[id]).filter(Boolean);
@@ -588,7 +592,7 @@ function buildCard(movie, onDecide, opts={}){
     <p class="cast-line" data-cast-line>Cargando reparto...</p>
     <div class="overview">${movie.overview || 'Sin sinopsis disponible.'}</div>
   `;
-  card.appendChild(body);
+  content.appendChild(body);
 
   tmdb(`/movie/${movie.id}/credits`).then(data => {
     const names = (data.cast||[]).slice(0,3).map(c=>c.name);
@@ -600,16 +604,18 @@ function buildCard(movie, onDecide, opts={}){
     const actions = document.createElement('div'); actions.className = 'card-actions';
     actions.innerHTML = `
       <div class="round-btn nope" title="No me gusta">✕</div>
-      <div class="round-btn skip" title="No la he visto">?</div>
+      <div class="round-btn watchlist" title="Quiero verla">🕐</div>
       <div class="round-btn info" title="Más info">i</div>
       <div class="round-btn like" title="Me gusta">♥</div>
     `;
     actions.querySelector('.nope').onclick = () => onDecide('dislike');
-    actions.querySelector('.skip').onclick = () => onDecide('skip');
+    actions.querySelector('.watchlist').onclick = () => onDecide('watchlist');
     actions.querySelector('.like').onclick = () => onDecide('like');
     actions.querySelector('.info').onclick = () => openDetail(movie);
-    card.appendChild(actions);
+    content.appendChild(actions);
   }
+
+  card.appendChild(content);
 
   const likeFlag = posterWrap.querySelector('.swipe-flag.like');
   const nopeFlag = posterWrap.querySelector('.swipe-flag.nope');
@@ -651,7 +657,7 @@ function attachDrag(card, likeFlag, nopeFlag, onDecide){
 function registerDecision(movie, outcome){
   if(outcome === 'like'){ state.liked.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average, rating: 0 }); }
   else if(outcome === 'dislike'){ state.disliked.push({ id: movie.id, title: movie.title }); }
-  else { state.skipped.push({ id: movie.id, title: movie.title }); } // 'skip' = no la he visto, no afecta al gusto
+  else { state.watchlist.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average }); } // 'watchlist' = quiero verla
   state.lastSwipedMovie = movie;
   recomputeGenreScores();
   saveTaste();
@@ -730,7 +736,7 @@ function renderPlatforms(){
 function renderQuiz(){
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Antes de nada...</div>`));
-  wrap.appendChild(el('p','lead','Puntúa 8 títulos populares para que la primera tanda de recomendaciones ya vaya afinada. Si no la has visto, dilo — no cuenta como que no te gusta.'));
+  wrap.appendChild(el('p','lead','Puntúa 8 títulos populares para que la primera tanda de recomendaciones ya vaya afinada. Si te llama la atención pero no la has visto, guárdala con el reloj 🕐 — no cuenta como que no te gusta.'));
 
   const progress = el('div','quiz-progress');
   for(let i=0;i<state.quizQueue.length;i++){ progress.appendChild(el('span', i < state.quizIndex ? 'done' : '')); }
@@ -929,8 +935,8 @@ function renderMyList(){
   stats.innerHTML = `
     <div class="stat-card"><div class="num">${state.liked.length}</div><div class="lbl">Me gusta</div></div>
     <div class="stat-card"><div class="num">${state.disliked.length}</div><div class="lbl">Descartadas</div></div>
-    <div class="stat-card"><div class="num">${state.skipped.length}</div><div class="lbl">No vistas</div></div>
-    <div class="stat-card"><div class="num">${state.liked.length+state.disliked.length+state.skipped.length}</div><div class="lbl">Total</div></div>
+    <div class="stat-card"><div class="num">${state.watchlist.length}</div><div class="lbl">Por ver</div></div>
+    <div class="stat-card"><div class="num">${state.liked.length+state.disliked.length+state.watchlist.length}</div><div class="lbl">Total</div></div>
   `;
   wrap.appendChild(stats);
 
@@ -959,6 +965,34 @@ function renderMyList(){
       const row = el('div','genre-bar-row');
       const pct = Math.round((score/max)*100);
       row.innerHTML = `<div style="display:flex; justify-content:space-between; font-size:12px;"><span>${state.genreMap[gid]||'—'}</span><span style="color:var(--text-muted)">${score}</span></div><div class="genre-bar-track"><div class="genre-bar-fill" style="width:${pct}%"></div></div>`;
+      wrap.appendChild(row);
+    });
+  }
+
+  wrap.appendChild(el('label','field-label','🕐 Por ver'));
+  if(!state.watchlist.length){
+    wrap.appendChild(el('div','empty-mini','Guarda títulos con el reloj mientras haces swipe y aparecerán aquí.'));
+  } else {
+    state.watchlist.slice().reverse().forEach(m => {
+      const row = el('div','list-row');
+      row.innerHTML = `
+        <img class="list-poster" src="${m.poster_path ? posterUrl(m.poster_path,'w154') : ''}">
+        <div class="list-info"><div class="t">${m.title}</div><div class="m">${(m.vote_average? '★ '+m.vote_average.toFixed(1) : '')}</div></div>
+        <span style="color:var(--teal); font-size:18px; padding:4px 6px; cursor:pointer;" data-watched title="Ya la vi, me gustó">♥</span>
+        <span class="remove-x" data-remove title="Quitar">✕</span>
+      `;
+      row.onclick = () => openDetail(m);
+      row.querySelector('[data-watched]').onclick = (e) => {
+        e.stopPropagation();
+        state.watchlist = state.watchlist.filter(x => x.id !== m.id);
+        state.liked.push({ id:m.id, title:m.title, poster_path:m.poster_path, genre_ids:m.genre_ids, vote_average:m.vote_average, rating:0 });
+        recomputeGenreScores(); saveTaste(); renderMyList();
+      };
+      row.querySelector('[data-remove]').onclick = (e) => {
+        e.stopPropagation();
+        state.watchlist = state.watchlist.filter(x => x.id !== m.id);
+        saveTaste(); renderMyList();
+      };
       wrap.appendChild(row);
     });
   }
