@@ -3,17 +3,42 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sesión continua — descubre qué ver</title>
+<title>Sesión Continua — descubre qué película o serie ver hoy</title>
+<meta name="description" content="Encuentra qué ver en Netflix, HBO Max, Disney+ y Prime Video deslizando como en Tinder. Recomendaciones personalizadas según tus gustos, retos y curiosidades de cine." />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://recomendador-ten.vercel.app/" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Sesión Continua — descubre qué ver hoy" />
+<meta property="og:description" content="Desliza como en Tinder y encuentra tu próxima película o serie según tus plataformas de streaming y tus gustos." />
+<meta property="og:url" content="https://recomendador-ten.vercel.app/" />
+<meta property="og:locale" content="es_ES" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="Sesión Continua — descubre qué ver hoy" />
+<meta name="twitter:description" content="Desliza como en Tinder y encuentra tu próxima película o serie según tus plataformas de streaming y tus gustos." />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Sesión Continua",
+  "description": "Descubre qué película o serie ver mediante swipes personalizados, filtrando por tus plataformas de streaming.",
+  "applicationCategory": "EntertainmentApplication",
+  "operatingSystem": "Web",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<!-- Google tag (gtag.js) — sustituye G-XXXXXXXXXX por tu Measurement ID real de GA4 -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<!-- Google tag (gtag.js) — Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GMMGRRBJMB"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-XXXXXXXXXX');
+  gtag('config', 'G-GMMGRRBJMB');
 </script>
 
 <style>
@@ -122,15 +147,21 @@
 
   /* tarjeta */
   .stack{ position:relative; margin-top: 10px; padding-bottom: 14px; }
-  .card-behind{
-    position:absolute; top:12px; left:10px; right:10px; bottom:-8px;
-    background: var(--surface-2); border-radius:20px; border:1px solid var(--border); z-index:0;
+  .card-behind{ display:none; }
+  .stack{ position:relative; margin-top: 10px; padding-bottom: 14px; display:flex; align-items:center; justify-content:center; min-height: 60px; }
+  .peek-card{
+    position:absolute; width:60%; aspect-ratio:2/3; border-radius:18px; overflow:hidden;
+    opacity:0.4; filter:saturate(0.6) brightness(0.7); transform:scale(0.92); z-index:0; pointer-events:none;
+    background: var(--surface-2); border:1px solid var(--border);
   }
+  .peek-card img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .peek-card.left{ left:-14%; }
+  .peek-card.right{ right:-14%; }
   .card{
-    position:relative; z-index:1; border-radius: 20px; overflow:hidden;
+    position:relative; z-index:1; border-radius: 20px; overflow:hidden; width:100%;
     background: var(--surface); border: 1px solid var(--border);
     display:flex; flex-direction:column;
-    box-shadow: 0 16px 34px rgba(0,0,0,0.4);
+    box-shadow: 0 16px 34px rgba(0,0,0,0.5);
     touch-action: none; user-select:none;
   }
   .poster-wrap{ position:relative; width:100%; aspect-ratio: 2 / 3; background: var(--surface-2); flex-shrink:0; overflow:hidden; }
@@ -141,9 +172,14 @@
     font-size: 12px; font-weight:700; padding: 4px 11px; border-radius: 20px; border:1px solid #E8B23D40;
   }
   .badge-platform{
-    position:absolute; top:12px; right:12px; background: rgba(20,20,26,0.75);
-    color:#fff; font-size:11px; padding: 4px 10px; border-radius: 20px; display:flex; align-items:center; gap:5px; border:1px solid var(--border);
+    position:absolute; top:12px; right:12px; display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; max-width:70%;
   }
+  .provider-chip{
+    background: rgba(20,20,26,0.8); color:#fff; font-size:10.5px; font-weight:600; padding: 4px 9px; border-radius: 20px;
+    display:flex; align-items:center; gap:5px; border:1px solid var(--border);
+  }
+  .provider-chip .dot{ width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .provider-chip.unavailable{ background: rgba(225,97,92,0.18); border-color: var(--red); color: #ffdad8; }
   .swipe-flag{
     position:absolute; top: 20px; padding: 6px 16px; border-radius: 8px; font-size: 20px;
     font-family:'Bebas Neue',sans-serif; letter-spacing:0.06em; border: 3px solid; opacity:0; transform: rotate(-12deg);
@@ -151,7 +187,7 @@
   .swipe-flag.like{ left: 20px; color: var(--teal); border-color: var(--teal); }
   .swipe-flag.nope{ right: 20px; color: var(--red); border-color: var(--red); transform: rotate(12deg); }
 
-  .card-body{ padding: 16px 18px 18px; display:flex; flex-direction:column; }
+  .card-body{ padding: 16px 18px 8px; display:flex; flex-direction:column; }
   .card-title{ font-size: 24px; line-height:1.05; }
   .card-meta{ color: var(--text-muted); font-size: 12px; margin: 4px 0 10px; }
   .genre-row{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
@@ -160,15 +196,19 @@
   .cast-line{ font-size:12px; color: var(--text-muted); margin: 0 0 4px; }
   .cast-line b{ color: var(--text); font-weight:500; }
 
-  .controls{ display:flex; justify-content:center; align-items:center; gap: 20px; margin-top: 16px; }
-  .round-btn{
-    width: 56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    background: var(--surface); border: 1px solid var(--border); cursor:pointer; font-size: 22px;
+  .card-actions{
+    display:flex; align-items:center; justify-content:center; gap: 14px;
+    padding: 10px 16px 20px; background: var(--surface); border-top: 1px solid var(--border);
   }
-  .round-btn.nope{ color: var(--red); border-color: var(--red-dim); }
-  .round-btn.like{ color: var(--teal); border-color: var(--teal-dim); }
-  .round-btn.info{ width:42px; height:42px; font-size:16px; color: var(--text-muted); }
-  .round-btn:active{ transform: scale(0.92); }
+  .round-btn{
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; border:none; font-family:inherit;
+  }
+  .card-actions .round-btn.nope{ width:54px; height:54px; font-size:22px; background: var(--red); color:#2B0D0C; box-shadow:0 4px 14px #E1615C40; }
+  .card-actions .round-btn.like{ width:54px; height:54px; font-size:22px; background: var(--teal); color:#0B211D; box-shadow:0 4px 14px #2E9C8F40; }
+  .card-actions .round-btn.skip{ width:44px; height:44px; font-size:17px; background: var(--surface-2); color: var(--text-muted); border:1px solid var(--border); }
+  .card-actions .round-btn.info{ width:44px; height:44px; font-size:15px; background: var(--surface-2); color: var(--gold); border:1px solid var(--border); }
+  .round-btn:active{ transform: scale(0.9); }
 
   .empty-state{ text-align:center; padding: 70px 20px; color: var(--text-muted); background:var(--surface); border-radius:20px; border:1px solid var(--border); }
   .empty-state .display{ font-size: 26px; color: var(--gold); margin-bottom: 8px; }
@@ -348,6 +388,9 @@ let state = {
   current: null,
   liked: [],      // [{id,title,poster_path,genre_ids,vote_average,rating}]
   disliked: [],   // [{id,title}]
+  skipped: [],    // [{id,title}] — "no la he visto", neutro
+  providerCache: {},
+  lastSwipedMovie: null,
   genreScores: {},
   page: 1,
   quizQueue: [],
@@ -369,14 +412,14 @@ function loadStorage(){
   const s = storeGet('settings');
   if(s){ state.platforms = s.platforms||[]; state.providerIds = s.providerIds||{}; }
   const t = storeGet('taste');
-  if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; }
+  if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; state.skipped = t.skipped||[]; }
   const g = storeGet('gameStreak');
   if(typeof g === 'number') state.streak = g;
   recomputeGenreScores();
 }
 function saveStreak(){ storeSet('gameStreak', state.streak); }
 function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); }
-function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked}); }
+function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, skipped: state.skipped}); }
 
 function recomputeGenreScores(){
   const scores = {};
@@ -426,8 +469,23 @@ async function fetchDiscoverPage(page, opts={}){
     page
   };
   if(opts.genre) params.with_genres = opts.genre;
+  if(opts.decadeStart){
+    params['primary_release_date.gte'] = `${opts.decadeStart}-01-01`;
+    params['primary_release_date.lte'] = `${opts.decadeStart+9}-12-31`;
+  }
   const data = await tmdb('/discover/movie', params);
   return data.results || [];
+}
+
+// evita que la cola sea siempre "estrenos populares": alterna entre popularidad,
+// mejor valoradas de siempre y una década al azar
+function pickExplorationMode(){
+  const roll = Math.random();
+  if(roll < 0.45) return { sortBy: 'popularity.desc' };
+  if(roll < 0.7) return { sortBy: 'vote_average.desc', minVotes: 300 };
+  const currentYear = new Date().getFullYear();
+  const decadeStart = Math.floor((1970 + Math.floor(Math.random() * (currentYear - 1980)) ) / 10) * 10;
+  return { sortBy: 'popularity.desc', decadeStart };
 }
 
 function topGenre(){
@@ -438,12 +496,13 @@ function topGenre(){
 }
 
 async function ensureQueue(){
-  const seen = new Set([...state.liked.map(m=>m.id), ...state.disliked.map(m=>m.id), ...state.queue.map(m=>m.id)]);
+  const seen = new Set([...state.liked.map(m=>m.id), ...state.disliked.map(m=>m.id), ...state.skipped.map(m=>m.id), ...state.queue.map(m=>m.id)]);
   let guard = 0;
   while(state.queue.length < 5 && guard < 20){
     guard++;
     const useBias = state.liked.length >= 4 && Math.random() < 0.5;
-    const results = await fetchDiscoverPage(state.page, useBias ? { genre: topGenre() } : {});
+    const opts = useBias ? { genre: topGenre() } : pickExplorationMode();
+    const results = await fetchDiscoverPage(state.page, opts);
     state.page += 1;
     const fresh = results.filter(m => !seen.has(m.id) && m.poster_path);
     fresh.forEach(m => seen.add(m.id));
@@ -454,6 +513,43 @@ async function ensureQueue(){
 
 /* ---------- swipe genérico (sirve para quiz y para la cola principal) ---------- */
 function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w500'}${path}` : null; }
+
+async function fetchProviders(movieId){
+  if(state.providerCache[movieId]) return state.providerCache[movieId];
+  try{
+    const data = await tmdb(`/movie/${movieId}/watch_providers`);
+    const flatrate = (data.results && data.results[state.region] && data.results[state.region].flatrate) || [];
+    state.providerCache[movieId] = flatrate;
+    return flatrate;
+  }catch(e){ return []; }
+}
+function matchOwnedPlatforms(flatrateList){
+  // de la lista real de proveedores, cuáles coinciden con las plataformas que el usuario tiene marcadas
+  const owned = [];
+  Object.entries(PROVIDER_QUERY).forEach(([key, cfg]) => {
+    if(!state.platforms.includes(key)) return;
+    if(flatrateList.some(p => cfg.names.includes(p.provider_name))) owned.push(key);
+  });
+  return owned;
+}
+function renderProviderChips(container, movieId){
+  fetchProviders(movieId).then(list => {
+    const owned = matchOwnedPlatforms(list);
+    container.innerHTML = '';
+    if(owned.length){
+      owned.forEach(key => {
+        const cfg = PROVIDER_QUERY[key];
+        container.insertAdjacentHTML('beforeend', `<span class="provider-chip"><span class="dot" style="background:${cfg.dot}"></span>${cfg.label}</span>`);
+      });
+    } else if(list.length){
+      // disponible, pero no en ninguna de tus plataformas marcadas
+      const names = list.slice(0,2).map(p=>p.provider_name).join(', ');
+      container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">No está en las tuyas (${names})</span>`);
+    } else {
+      container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">Sin streaming ahora</span>`);
+    }
+  });
+}
 
 function setBackdrop(path){
   const layer = document.getElementById('backdrop-layer');
@@ -466,7 +562,7 @@ function setBackdrop(path){
   img.src = url;
 }
 
-function buildCard(movie, onDecide){
+function buildCard(movie, onDecide, opts={}){
   setBackdrop(movie.backdrop_path);
   const card = document.createElement('div'); card.className = 'card';
   const posterWrap = document.createElement('div'); posterWrap.className = 'poster-wrap';
@@ -476,9 +572,8 @@ function buildCard(movie, onDecide){
 
   const score = movie.vote_average ? Math.round(movie.vote_average * 10) + '%' : '—';
   posterWrap.insertAdjacentHTML('beforeend', `<div class="badge-score">★ ${score}</div>`);
-
-  const anyPlatform = state.platforms.find(p => state.providerIds[p]);
-  if(anyPlatform){ posterWrap.insertAdjacentHTML('beforeend', `<div class="badge-platform">${PROVIDER_QUERY[anyPlatform].label}</div>`); }
+  posterWrap.insertAdjacentHTML('beforeend', `<div class="badge-platform" data-providers></div>`);
+  renderProviderChips(posterWrap.querySelector('[data-providers]'), movie.id);
 
   posterWrap.insertAdjacentHTML('beforeend', `<div class="swipe-flag like">ME GUSTA</div><div class="swipe-flag nope">PASO</div>`);
   card.appendChild(posterWrap);
@@ -495,16 +590,30 @@ function buildCard(movie, onDecide){
   `;
   card.appendChild(body);
 
-  // reparto: se pide aparte y se inyecta cuando llega, sin bloquear la tarjeta
   tmdb(`/movie/${movie.id}/credits`).then(data => {
     const names = (data.cast||[]).slice(0,3).map(c=>c.name);
     const line = body.querySelector('[data-cast-line]');
     if(line) line.innerHTML = names.length ? `Con <b>${names.join(', ')}</b>` : '';
   }).catch(()=>{ const line = body.querySelector('[data-cast-line]'); if(line) line.remove(); });
 
+  if(opts.showActions !== false){
+    const actions = document.createElement('div'); actions.className = 'card-actions';
+    actions.innerHTML = `
+      <div class="round-btn nope" title="No me gusta">✕</div>
+      <div class="round-btn skip" title="No la he visto">?</div>
+      <div class="round-btn info" title="Más info">i</div>
+      <div class="round-btn like" title="Me gusta">♥</div>
+    `;
+    actions.querySelector('.nope').onclick = () => onDecide('dislike');
+    actions.querySelector('.skip').onclick = () => onDecide('skip');
+    actions.querySelector('.like').onclick = () => onDecide('like');
+    actions.querySelector('.info').onclick = () => openDetail(movie);
+    card.appendChild(actions);
+  }
+
   const likeFlag = posterWrap.querySelector('.swipe-flag.like');
   const nopeFlag = posterWrap.querySelector('.swipe-flag.nope');
-  attachDrag(card, likeFlag, nopeFlag, onDecide);
+  attachDrag(card, likeFlag, nopeFlag, (liked) => onDecide(liked ? 'like' : 'dislike'));
   return card;
 }
 
@@ -539,9 +648,11 @@ function attachDrag(card, likeFlag, nopeFlag, onDecide){
   card.addEventListener('pointerleave', () => { if(dragging){ dragging=false; card.style.transition='transform .25s ease'; card.style.transform='translate(0,0) rotate(0)'; likeFlag.style.opacity=0; nopeFlag.style.opacity=0; } });
 }
 
-function registerSwipe(movie, liked){
-  if(liked){ state.liked.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average, rating: 0 }); }
-  else { state.disliked.push({ id: movie.id, title: movie.title }); }
+function registerDecision(movie, outcome){
+  if(outcome === 'like'){ state.liked.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average, rating: 0 }); }
+  else if(outcome === 'dislike'){ state.disliked.push({ id: movie.id, title: movie.title }); }
+  else { state.skipped.push({ id: movie.id, title: movie.title }); } // 'skip' = no la he visto, no afecta al gusto
+  state.lastSwipedMovie = movie;
   recomputeGenreScores();
   saveTaste();
 }
@@ -619,7 +730,7 @@ function renderPlatforms(){
 function renderQuiz(){
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Antes de nada...</div>`));
-  wrap.appendChild(el('p','lead','Puntúa 8 títulos populares para que la primera tanda de recomendaciones ya vaya afinada.'));
+  wrap.appendChild(el('p','lead','Puntúa 8 títulos populares para que la primera tanda de recomendaciones ya vaya afinada. Si no la has visto, dilo — no cuenta como que no te gusta.'));
 
   const progress = el('div','quiz-progress');
   for(let i=0;i<state.quizQueue.length;i++){ progress.appendChild(el('span', i < state.quizIndex ? 'done' : '')); }
@@ -630,24 +741,15 @@ function renderQuiz(){
   if(!movie){
     stack.appendChild(el('div','empty-state', `<div class="display">¡Listo!</div><p>Vamos a por tus recomendaciones.</p>`));
   } else {
-    stack.appendChild(el('div','card-behind'));
-    stack.appendChild(buildCard(movie, (liked) => {
-      registerSwipe(movie, liked);
+    stack.appendChild(buildCard(movie, (outcome) => {
+      registerDecision(movie, outcome);
       state.quizIndex += 1;
       render();
     }));
   }
   wrap.appendChild(stack);
 
-  if(movie){
-    const controls = el('div','controls');
-    const nope = el('div','round-btn nope','✕');
-    const like = el('div','round-btn like','♥');
-    nope.onclick = () => { registerSwipe(movie, false); state.quizIndex += 1; render(); };
-    like.onclick = () => { registerSwipe(movie, true); state.quizIndex += 1; render(); };
-    controls.appendChild(nope); controls.appendChild(like);
-    wrap.appendChild(controls);
-  } else {
+  if(!movie){
     const btn = el('button','btn','Ver mis recomendaciones');
     btn.onclick = async () => { state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); };
     wrap.appendChild(btn);
@@ -666,31 +768,26 @@ function renderSwipe(){
     setBackdrop(null);
     stack.appendChild(el('div','empty-state', `<div class="display">Sin nada nuevo por ahora</div><p>Prueba a marcar más plataformas en "Mi lista" o vuelve en un rato.</p>`));
   } else {
-    stack.appendChild(el('div','card-behind'));
+    const prevPeek = state.lastSwipedMovie;
+    const nextPeek = state.queue[1];
+    if(prevPeek && prevPeek.poster_path){
+      stack.appendChild(el('div','peek-card left', `<img src="${posterUrl(prevPeek.poster_path,'w200')}">`));
+    }
+    if(nextPeek && nextPeek.poster_path){
+      stack.appendChild(el('div','peek-card right', `<img src="${posterUrl(nextPeek.poster_path,'w200')}">`));
+    }
     stack.appendChild(buildCard(state.current, doSwipe));
   }
   wrap.appendChild(stack);
-
-  if(state.current){
-    const controls = el('div','controls');
-    const nope = el('div','round-btn nope','✕');
-    const info = el('div','round-btn info','i');
-    const like = el('div','round-btn like','♥');
-    nope.onclick = () => doSwipe(false);
-    like.onclick = () => doSwipe(true);
-    info.onclick = () => openDetail(state.current);
-    controls.appendChild(nope); controls.appendChild(info); controls.appendChild(like);
-    wrap.appendChild(controls);
-  }
 
   wrap.appendChild(el('div','footer-note', `Filtrando por: ${state.platforms.map(p=>PROVIDER_QUERY[p].label).join(', ')}`));
   app.appendChild(wrap);
   appendBottomNav('swipe');
 }
 
-async function doSwipe(liked){
+async function doSwipe(outcome){
   if(!state.current) return;
-  registerSwipe(state.current, liked);
+  registerDecision(state.current, outcome);
   state.queue.shift();
   state.current = state.queue[0] || null;
   render();
@@ -718,6 +815,7 @@ async function openDetail(movie){
       <div class="sheet-close"></div>
       <div class="display" style="font-size:22px;">${data.title}</div>
       <div class="card-meta">${(data.release_date||'').slice(0,4)} · ${data.runtime ? data.runtime+' min' : ''} · ${(data.genres||[]).map(g=>g.name).join(', ')}</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin: 4px 0 10px;" data-detail-providers></div>
       <div class="stat-row">
         <div class="stat"><div class="label">TMDB</div><div class="value">★ ${data.vote_average ? data.vote_average.toFixed(1) : '—'}</div></div>
         <div class="stat"><div class="label">Votos</div><div class="value">${data.vote_count || 0}</div></div>
@@ -727,6 +825,7 @@ async function openDetail(movie){
       ${cast.length ? `<div class="field-label">Reparto</div><div class="cast-row">${cast.map(n=>`<span class="genre-pill">${n}</span>`).join('')}</div>` : ''}
       ${recs.length ? `<div class="field-label">También te podría gustar</div><div class="rec-row">${recs.map(r=>`<div class="rec-item" data-rec-id="${r.id}"><img src="${posterUrl(r.poster_path,'w200')}"><div class="rec-title">${r.title}</div></div>`).join('')}</div>` : ''}
     `;
+    renderProviderChips(sheet.querySelector('[data-detail-providers]'), movie.id);
 
     const tEl = sheet.querySelector('[data-trailer]');
     if(tEl) tEl.onclick = () => window.open('https://www.youtube.com/watch?v=' + tEl.dataset.trailer, '_blank');
@@ -806,11 +905,16 @@ function paintTopList(container, list){
     row.innerHTML = `
       <div class="list-rank">${i+1}</div>
       <img class="list-poster" src="${posterUrl(m.poster_path,'w154')}">
-      <div class="list-info"><div class="t">${m.title}</div><div class="m">${(m.release_date||'').slice(0,4)} · ${(m.genre_ids||[]).slice(0,2).map(g=>state.genreMap[g]).filter(Boolean).join(', ')}</div></div>
+      <div class="list-info">
+        <div class="t">${m.title}</div>
+        <div class="m">${(m.release_date||'').slice(0,4)} · ${(m.genre_ids||[]).slice(0,2).map(g=>state.genreMap[g]).filter(Boolean).join(', ')}</div>
+        <div style="display:flex; gap:4px; margin-top:4px;" data-providers></div>
+      </div>
       <div class="list-score">★ ${m.vote_average ? m.vote_average.toFixed(1) : '—'}</div>
     `;
     row.onclick = () => openDetail(m);
     container.appendChild(row);
+    renderProviderChips(row.querySelector('[data-providers]'), m.id);
   });
 }
 
@@ -821,10 +925,12 @@ function renderMyList(){
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Mi lista</div>`));
 
   const stats = el('div','stat-grid');
+  stats.style.gridTemplateColumns = 'repeat(4, 1fr)';
   stats.innerHTML = `
     <div class="stat-card"><div class="num">${state.liked.length}</div><div class="lbl">Me gusta</div></div>
     <div class="stat-card"><div class="num">${state.disliked.length}</div><div class="lbl">Descartadas</div></div>
-    <div class="stat-card"><div class="num">${state.liked.length+state.disliked.length}</div><div class="lbl">Valoradas</div></div>
+    <div class="stat-card"><div class="num">${state.skipped.length}</div><div class="lbl">No vistas</div></div>
+    <div class="stat-card"><div class="num">${state.liked.length+state.disliked.length+state.skipped.length}</div><div class="lbl">Total</div></div>
   `;
   wrap.appendChild(stats);
 
