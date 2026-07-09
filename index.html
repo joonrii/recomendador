@@ -731,7 +731,7 @@ function buildCard(movie, onDecide, opts={}){
   const genres = (movie.genre_ids||[]).slice(0,3).map(id => gMap[id]).filter(Boolean);
   body.innerHTML = `
     <div class="card-title display">${title}</div>
-    <div class="card-meta">${year || ''}${ratingText ? ` · <span class="rating-inline">★ ${ratingText}</span>` : ''} <span class="trailer-inline" data-trailer-btn style="display:none;">▶ Tráiler</span></div>
+    <div class="card-meta">${year || ''}${ratingText ? ` · <span class="rating-inline">★ ${ratingText}</span>` : ''} <span class="trailer-inline" data-trailer-btn>⏳ Tráiler...</span></div>
     <div class="genre-row">${genres.map(g=>`<span class="genre-pill">${g}</span>`).join('')}</div>
     <p class="cast-line" data-cast-line>Cargando reparto...</p>
     <div class="overview">${movie.overview || 'Sin sinopsis disponible.'}</div>
@@ -746,11 +746,20 @@ function buildCard(movie, onDecide, opts={}){
 
   findTrailer(movie.id, movie.media_type).then(trailer => {
     const btn = body.querySelector('[data-trailer-btn]');
-    if(btn && trailer){
-      btn.style.display = 'inline';
+    if(!btn) return;
+    if(trailer){
+      btn.textContent = '▶ Tráiler';
+      btn.style.opacity = '1';
       btn.addEventListener('pointerdown', e => e.stopPropagation());
       btn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); window.open('https://www.youtube.com/watch?v=' + trailer.key, '_blank', 'noopener'); };
+    } else {
+      btn.textContent = 'Sin tráiler';
+      btn.style.opacity = '0.5';
+      btn.style.cursor = 'default';
     }
+  }).catch(err => {
+    const btn = body.querySelector('[data-trailer-btn]');
+    if(btn){ btn.textContent = 'Error tráiler'; btn.title = String(err); btn.style.opacity='0.5'; }
   });
 
   if(opts.showActions !== false){
