@@ -639,6 +639,22 @@ async function ensureQueue(){
 }
 
 /* ---------- swipe genérico (sirve para quiz y para la cola principal) ---------- */
+async function findTrailer(movieId, mediaType){
+  const cfg = mt(mediaType);
+  const pick = (results) => (results||[]).find(v => v.site === 'YouTube' && v.type === 'Trailer') || (results||[]).find(v => v.site === 'YouTube');
+  try{
+    // muchas pelis/series solo tienen el tráiler indexado en inglés (o sin idioma marcado),
+    // así que pedimos varios idiomas a la vez en vez de restringir solo a español
+    const data = await tmdb(cfg.videos(movieId), { include_video_language: 'es,en,null' });
+    const found = pick(data.results);
+    if(found) return found;
+  }catch(e){}
+  try{
+    const fallback = await tmdb(cfg.videos(movieId));
+    return pick(fallback.results);
+  }catch(e){ return null; }
+}
+
 function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w500'}${path}` : null; }
 
 async function fetchProviders(movieId, type){
@@ -728,14 +744,14 @@ function buildCard(movie, onDecide, opts={}){
     if(line) line.innerHTML = names.length ? `Con <b>${names.join(', ')}</b>` : '';
   }).catch(()=>{ const line = body.querySelector('[data-cast-line]'); if(line) line.remove(); });
 
-  tmdb(cfg.videos(movie.id)).then(data => {
-    const trailer = (data.results||[]).find(v => v.site === 'YouTube' && v.type === 'Trailer') || (data.results||[]).find(v => v.site === 'YouTube');
+  findTrailer(movie.id, movie.media_type).then(trailer => {
     const btn = body.querySelector('[data-trailer-btn]');
     if(btn && trailer){
       btn.style.display = 'inline';
-      btn.onclick = (e) => { e.stopPropagation(); window.open('https://www.youtube.com/watch?v=' + trailer.key, '_blank'); };
+      btn.addEventListener('pointerdown', e => e.stopPropagation());
+      btn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); window.open('https://www.youtube.com/watch?v=' + trailer.key, '_blank', 'noopener'); };
     }
-  }).catch(()=>{});
+  });
 
   if(opts.showActions !== false){
     const actions = document.createElement('div'); actions.className = 'card-actions';
@@ -1084,9 +1100,11 @@ async function openDetail(movie){
   app.appendChild(overlay);
 
   try{
-    const data = await tmdb(cfg.detail(movie.id), { language: 'es-ES', append_to_response: 'credits,videos,recommendations' });
+    const [data, trailer] = await Promise.all([
+      tmdb(cfg.detail(movie.id), { language: 'es-ES', append_to_response: 'credits,recommendations' }),
+      findTrailer(movie.id, type)
+    ]);
     const cast = (data.credits && data.credits.cast || []).slice(0,5).map(c=>c.name);
-    const trailer = (data.videos && data.videos.results || []).find(v => v.site === 'YouTube' && v.type === 'Trailer');
     const recs = (data.recommendations && data.recommendations.results || []).filter(m=>m.poster_path).slice(0,6).map(r => ({ ...r, media_type: type }));
     const title = data.title || data.name;
     const dateStr = data.release_date || data.first_air_date;
