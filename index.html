@@ -168,10 +168,6 @@
   .poster-wrap{ position:relative; width:100%; aspect-ratio: 2 / 3; background: var(--surface-2); flex-shrink:0; overflow:hidden; }
   .poster-wrap img{ width:100%; height:100%; object-fit: cover; display:block; }
   .poster-fallback{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; color: var(--text-muted); font-size: 40px; }
-  .badge-score{
-    position:absolute; top:12px; left:12px; background: rgba(20,20,26,0.75); color:var(--gold);
-    font-size: 12px; font-weight:700; padding: 4px 11px; border-radius: 20px; border:1px solid #E8B23D40;
-  }
   .badge-platform{
     position:absolute; top:12px; right:12px; display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; max-width:70%;
   }
@@ -190,7 +186,9 @@
 
   .card-body{ padding: 16px 18px 8px; display:flex; flex-direction:column; }
   .card-title{ font-size: 24px; line-height:1.05; }
-  .card-meta{ color: var(--text-muted); font-size: 12px; margin: 4px 0 10px; }
+  .card-meta{ color: var(--text-muted); font-size: 12px; margin: 4px 0 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .rating-inline{ color: var(--gold); font-weight:700; }
+  .trailer-inline{ background: var(--gold-dim); color: var(--gold); font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; cursor:pointer; }
   .genre-row{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
   .genre-pill{ background: var(--surface-2); font-size: 11px; padding: 4px 10px; border-radius: 20px; color: var(--text-muted); }
   .overview{ font-size: 13px; color: var(--text-muted); line-height:1.55; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; margin: 0 0 8px; }
@@ -308,6 +306,21 @@
 
   .streak-badge{ display:inline-flex; align-items:center; gap:6px; background: var(--gold-dim); color: var(--gold); font-size:12px; font-weight:600; padding:5px 12px; border-radius:20px; margin-bottom:10px; }
 
+  .select-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 18px; }
+  .select-tile{ position:relative; cursor:pointer; border-radius:12px; overflow:hidden; border:3px solid transparent; background:var(--surface-2); }
+  .select-tile img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; opacity:0.82; transition: opacity .15s; }
+  .select-tile.selected{ border-color: var(--gold); }
+  .select-tile.selected img{ opacity:1; }
+  .select-tile.selected::after{
+    content:"✓"; position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
+    background: var(--gold); color:#1A1200; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center;
+  }
+  .select-tile .tile-label{ position:absolute; bottom:0; left:0; right:0; padding:6px 6px 5px; font-size:10.5px; line-height:1.2;
+    background:linear-gradient(transparent, rgba(0,0,0,0.85)); color:#fff; }
+  .select-tile.actor img{ aspect-ratio:1/1; object-fit:cover; }
+  .select-counter{ position:sticky; top:0; text-align:center; font-size:13px; color: var(--text-muted); margin-bottom:4px; }
+  .select-counter b{ color: var(--gold); }
+
   .game-question{
     font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:0.03em; color:#fff;
     background: var(--surface); border:1px solid var(--gold); border-radius:14px; padding:16px 14px;
@@ -384,20 +397,32 @@ const PROVIDER_QUERY = {
 let state = {
   screen: 'loading',
   region: 'US',
+  mediaType: 'movie',
+  queueStash: { movie: [], tv: [] },
+  currentStash: { movie: null, tv: null },
+  pageStash: { movie: 1, tv: 1 },
   platforms: [],
   providerIds: {},
-  genreMap: {},
+  genreMaps: { movie: {}, tv: {} },
   queue: [],
   current: null,
   liked: [],      // [{id,title,poster_path,genre_ids,vote_average,rating}]
   disliked: [],   // [{id,title}]
   watchlist: [],  // [{id,title,poster_path,genre_ids}] — "quiero verla"
+  actorScores: {},
+  directorScores: {},
   providerCache: {},
   lastSwipedMovie: null,
   genreScores: {},
   page: 1,
   quizQueue: [],
   quizIndex: 0,
+  quizMoviePool: [],
+  quizMovieSelected: [],
+  quizActorPool: [],
+  quizActorSelected: [],
+  likedActors: [],   // [{id,name,profile_path}]
+  likedDirectors: [],
   topList: null,
   topMode: 'rated',
   trendingList: null,
@@ -415,14 +440,14 @@ function loadStorage(){
   const s = storeGet('settings');
   if(s){ state.platforms = s.platforms||[]; state.providerIds = s.providerIds||{}; }
   const t = storeGet('taste');
-  if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; state.watchlist = t.watchlist||[]; }
+  if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; state.watchlist = t.watchlist||[]; state.likedActors = t.likedActors||[]; state.likedDirectors = t.likedDirectors||[]; state.actorScores = t.actorScores||{}; state.directorScores = t.directorScores||{}; }
   const g = storeGet('gameStreak');
   if(typeof g === 'number') state.streak = g;
   recomputeGenreScores();
 }
 function saveStreak(){ storeSet('gameStreak', state.streak); }
 function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); }
-function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist}); }
+function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist, likedActors: state.likedActors, likedDirectors: state.likedDirectors, actorScores: state.actorScores, directorScores: state.directorScores}); }
 
 function recomputeGenreScores(){
   const scores = {};
@@ -431,6 +456,35 @@ function recomputeGenreScores(){
     (m.genre_ids||[]).forEach(g => { scores[g] = (scores[g]||0) + weight; });
   });
   state.genreScores = scores;
+}
+
+/* ---------- películas vs series: misma maquinaria, distinto endpoint ---------- */
+const MEDIA = {
+  movie: {
+    discover: '/discover/movie', genreList: '/genre/movie/list', popular:'/movie/popular', topRated:'/movie/top_rated', trending:'/trending/movie/week',
+    detail: id=>`/movie/${id}`, credits:id=>`/movie/${id}/credits`, videos:id=>`/movie/${id}/videos`, providers:id=>`/movie/${id}/watch/providers`, recommendations:id=>`/movie/${id}/recommendations`,
+    titleKey:'title', dateKey:'release_date', dateParamPrefix:'primary_release_date', label:'Películas', icon:'🎬'
+  },
+  tv: {
+    discover: '/discover/tv', genreList: '/genre/tv/list', popular:'/tv/popular', topRated:'/tv/top_rated', trending:'/trending/tv/week',
+    detail: id=>`/tv/${id}`, credits:id=>`/tv/${id}/credits`, videos:id=>`/tv/${id}/videos`, providers:id=>`/tv/${id}/watch/providers`, recommendations:id=>`/tv/${id}/recommendations`,
+    titleKey:'name', dateKey:'first_air_date', dateParamPrefix:'first_air_date', label:'Series', icon:'📺'
+  }
+};
+function mt(type){ return MEDIA[type || state.mediaType]; }
+function titleOf(item){ return item[mt(item.media_type).titleKey] || item.title || item.name || ''; }
+function dateOf(item){ return item[mt(item.media_type).dateKey] || item.release_date || item.first_air_date || ''; }
+function genreMapFor(type){ return state.genreMaps[type || state.mediaType] || {}; }
+
+function switchMediaType(newType){
+  if(newType === state.mediaType) return;
+  state.queueStash[state.mediaType] = state.queue;
+  state.currentStash[state.mediaType] = state.current;
+  state.pageStash[state.mediaType] = state.page;
+  state.mediaType = newType;
+  state.queue = state.queueStash[newType] || [];
+  state.current = state.currentStash[newType] || null;
+  state.page = state.pageStash[newType] || 1;
 }
 
 /* ---------- TMDB (a través de nuestro proxy de Vercel, sin clave en el navegador) ---------- */
@@ -446,11 +500,14 @@ async function tmdb(path, params={}){
 }
 
 async function verifyKeyAndLoadMeta(){
-  const genres = await tmdb('/genre/movie/list', { language: 'es-ES' });
-  state.genreMap = {};
-  genres.genres.forEach(g => state.genreMap[g.id] = g.name);
+  const [movieGenres, tvGenres, provList] = await Promise.all([
+    tmdb('/genre/movie/list', { language: 'es-ES' }),
+    tmdb('/genre/tv/list', { language: 'es-ES' }),
+    tmdb('/watch/providers/movie', { watch_region: state.region })
+  ]);
+  state.genreMaps.movie = {}; movieGenres.genres.forEach(g => state.genreMaps.movie[g.id] = g.name);
+  state.genreMaps.tv = {}; tvGenres.genres.forEach(g => state.genreMaps.tv[g.id] = g.name);
 
-  const provList = await tmdb('/watch/providers/movie', { watch_region: state.region });
   const ids = {};
   Object.entries(PROVIDER_QUERY).forEach(([key, cfg]) => {
     const match = provList.results.find(p => cfg.names.includes(p.provider_name));
@@ -462,6 +519,7 @@ async function verifyKeyAndLoadMeta(){
 function selectedProviderIds(){ return state.platforms.map(p => state.providerIds[p]).filter(Boolean); }
 
 async function fetchDiscoverPage(page, opts={}){
+  const cfg = mt(opts.mediaType);
   const params = {
     watch_region: state.region,
     with_watch_providers: selectedProviderIds().join('|'),
@@ -472,12 +530,15 @@ async function fetchDiscoverPage(page, opts={}){
     page
   };
   if(opts.genre) params.with_genres = opts.genre;
+  if(opts.cast) params.with_cast = opts.cast;
+  if(opts.crew) params.with_crew = opts.crew;
   if(opts.decadeStart){
-    params['primary_release_date.gte'] = `${opts.decadeStart}-01-01`;
-    params['primary_release_date.lte'] = `${opts.decadeStart+9}-12-31`;
+    params[`${cfg.dateParamPrefix}.gte`] = `${opts.decadeStart}-01-01`;
+    params[`${cfg.dateParamPrefix}.lte`] = `${opts.decadeStart+9}-12-31`;
   }
-  const data = await tmdb('/discover/movie', params);
-  return data.results || [];
+  const data = await tmdb(cfg.discover, params);
+  const type = opts.mediaType || state.mediaType;
+  return (data.results || []).map(m => ({ ...m, media_type: type }));
 }
 
 // evita que la cola sea siempre "estrenos populares": alterna entre popularidad,
@@ -497,17 +558,52 @@ function topGenre(){
   entries.sort((a,b) => b[1]-a[1]);
   return entries[0][0];
 }
+function topActor(){
+  const entries = Object.entries(state.actorScores);
+  if(!entries.length) return null;
+  entries.sort((a,b) => b[1]-a[1]);
+  return entries[Math.floor(Math.random()*Math.min(3,entries.length))][0];
+}
+function topDirector(){
+  const entries = Object.entries(state.directorScores);
+  if(!entries.length) return null;
+  entries.sort((a,b) => b[1]-a[1]);
+  return entries[0][0];
+}
+
+// motor de recomendación: combina varias señales en vez de solo género.
+// - "similar a una que te gustó" usa el propio motor de recomendaciones de TMDB (más fuerte que género)
+// - actor/director favoritos, aprendidos de lo que marcas con ♥ (y de lo elegido en el onboarding)
+// - género favorito
+// - descubrimiento general diversificado, para no estancarse siempre en lo mismo
+async function pickCandidates(page){
+  const roll = Math.random();
+  const cfg = mt();
+  if(state.liked.filter(m=>(m.media_type||'movie')===state.mediaType).length >= 3 && roll < 0.20){
+    const seedPool = state.liked.filter(m=>(m.media_type||'movie')===state.mediaType).slice(-15);
+    const seed = seedPool[Math.floor(Math.random()*seedPool.length)];
+    try{
+      const data = await tmdb(cfg.recommendations(seed.id), { language:'es-ES', page:1 });
+      if((data.results||[]).length) return data.results.map(m => ({ ...m, media_type: state.mediaType }));
+    }catch(e){}
+  }
+  const actorId = topActor();
+  if(actorId && roll < 0.42){ return fetchDiscoverPage(page, { cast: actorId }); }
+  const directorId = topDirector();
+  if(directorId && state.mediaType === 'movie' && roll < 0.58){ return fetchDiscoverPage(page, { crew: directorId }); }
+  if(state.liked.length >= 4 && roll < 0.78 && topGenre()){ return fetchDiscoverPage(page, { genre: topGenre() }); }
+  return fetchDiscoverPage(page, pickExplorationMode());
+}
 
 async function ensureQueue(){
-  const seen = new Set([...state.liked.map(m=>m.id), ...state.disliked.map(m=>m.id), ...state.watchlist.map(m=>m.id), ...state.queue.map(m=>m.id)]);
+  const sameType = m => (m.media_type||'movie') === state.mediaType;
+  const seen = new Set([...state.liked.filter(sameType).map(m=>m.id), ...state.disliked.filter(sameType).map(m=>m.id), ...state.watchlist.filter(sameType).map(m=>m.id), ...state.queue.map(m=>m.id)]);
   let guard = 0;
   let totalChecked = 0, totalConfirmed = 0;
   let fallbackPool = [];
   while(state.queue.length < 5 && guard < 20){
     guard++;
-    const useBias = state.liked.length >= 4 && Math.random() < 0.5;
-    const opts = useBias ? { genre: topGenre() } : pickExplorationMode();
-    const results = await fetchDiscoverPage(state.page, opts);
+    const results = await pickCandidates(state.page);
     state.page += 1;
     const candidates = results.filter(m => !seen.has(m.id) && m.poster_path);
     candidates.forEach(m => seen.add(m.id));
@@ -515,12 +611,12 @@ async function ensureQueue(){
     // el filtro de "discover" a veces no coincide con la disponibilidad real por título:
     // se comprueba cada candidata de verdad antes de enseñarla
     const checked = await Promise.all(candidates.map(async m => {
-      const providers = await fetchProviders(m.id);
+      const providers = await fetchProviders(m.id, m.media_type);
       totalChecked++;
       const owned = matchOwnedPlatforms(providers).length > 0;
       if(owned) totalConfirmed++;
       // guardamos una muestra cruda para poder diagnosticar si algo falla sistemáticamente
-      if(!state.debugSample) state.debugSample = { movieId: m.id, title: m.title, providers, ownedPlatforms: state.platforms.slice() };
+      if(!state.debugSample) state.debugSample = { movieId: m.id, title: titleOf(m), mediaType: m.media_type, providers, ownedPlatforms: state.platforms.slice() };
       return owned ? m : null;
     }));
     state.queue.push(...checked.filter(Boolean));
@@ -538,12 +634,13 @@ async function ensureQueue(){
 /* ---------- swipe genérico (sirve para quiz y para la cola principal) ---------- */
 function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w500'}${path}` : null; }
 
-async function fetchProviders(movieId){
-  if(state.providerCache[movieId]) return state.providerCache[movieId];
+async function fetchProviders(movieId, type){
+  const cacheKey = `${type||state.mediaType}:${movieId}`;
+  if(state.providerCache[cacheKey]) return state.providerCache[cacheKey];
   try{
-    const data = await tmdb(`/movie/${movieId}/watch/providers`);
+    const data = await tmdb(mt(type).providers(movieId));
     const flatrate = (data.results && data.results[state.region] && data.results[state.region].flatrate) || [];
-    state.providerCache[movieId] = flatrate;
+    state.providerCache[cacheKey] = flatrate;
     return flatrate;
   }catch(e){ return []; }
 }
@@ -556,8 +653,8 @@ function matchOwnedPlatforms(flatrateList){
   });
   return owned;
 }
-function renderProviderChips(container, movieId){
-  fetchProviders(movieId).then(list => {
+function renderProviderChips(container, movieId, type){
+  fetchProviders(movieId, type).then(list => {
     const owned = matchOwnedPlatforms(list);
     container.innerHTML = '';
     if(owned.length){
@@ -594,10 +691,8 @@ function buildCard(movie, onDecide, opts={}){
   if(url){ posterWrap.innerHTML = `<img src="${url}" alt="">`; }
   else { posterWrap.innerHTML = `<div class="poster-fallback">🎬</div>`; }
 
-  const score = movie.vote_average ? Math.round(movie.vote_average * 10) + '%' : '—';
-  posterWrap.insertAdjacentHTML('beforeend', `<div class="badge-score">★ ${score}</div>`);
   posterWrap.insertAdjacentHTML('beforeend', `<div class="badge-platform" data-providers></div>`);
-  renderProviderChips(posterWrap.querySelector('[data-providers]'), movie.id);
+  renderProviderChips(posterWrap.querySelector('[data-providers]'), movie.id, movie.media_type);
 
   posterWrap.insertAdjacentHTML('beforeend', `<div class="swipe-flag like">ME GUSTA</div><div class="swipe-flag nope">PASO</div>`);
   card.appendChild(posterWrap);
@@ -605,22 +700,35 @@ function buildCard(movie, onDecide, opts={}){
   const content = document.createElement('div'); content.className = 'card-content';
 
   const body = document.createElement('div'); body.className = 'card-body';
-  const year = (movie.release_date||'').slice(0,4);
-  const genres = (movie.genre_ids||[]).slice(0,3).map(id => state.genreMap[id]).filter(Boolean);
+  const cfg = mt(movie.media_type);
+  const title = titleOf(movie);
+  const year = (dateOf(movie)||'').slice(0,4);
+  const ratingText = movie.vote_average ? movie.vote_average.toFixed(1) : null;
+  const gMap = genreMapFor(movie.media_type);
+  const genres = (movie.genre_ids||[]).slice(0,3).map(id => gMap[id]).filter(Boolean);
   body.innerHTML = `
-    <div class="card-title display">${movie.title}</div>
-    <div class="card-meta">${year || ''}</div>
+    <div class="card-title display">${title}</div>
+    <div class="card-meta">${year || ''}${ratingText ? ` · <span class="rating-inline">★ ${ratingText}</span>` : ''} <span class="trailer-inline" data-trailer-btn style="display:none;">▶ Tráiler</span></div>
     <div class="genre-row">${genres.map(g=>`<span class="genre-pill">${g}</span>`).join('')}</div>
     <p class="cast-line" data-cast-line>Cargando reparto...</p>
     <div class="overview">${movie.overview || 'Sin sinopsis disponible.'}</div>
   `;
   content.appendChild(body);
 
-  tmdb(`/movie/${movie.id}/credits`).then(data => {
+  tmdb(cfg.credits(movie.id)).then(data => {
     const names = (data.cast||[]).slice(0,3).map(c=>c.name);
     const line = body.querySelector('[data-cast-line]');
     if(line) line.innerHTML = names.length ? `Con <b>${names.join(', ')}</b>` : '';
   }).catch(()=>{ const line = body.querySelector('[data-cast-line]'); if(line) line.remove(); });
+
+  tmdb(cfg.videos(movie.id)).then(data => {
+    const trailer = (data.results||[]).find(v => v.site === 'YouTube' && v.type === 'Trailer') || (data.results||[]).find(v => v.site === 'YouTube');
+    const btn = body.querySelector('[data-trailer-btn]');
+    if(btn && trailer){
+      btn.style.display = 'inline';
+      btn.onclick = (e) => { e.stopPropagation(); window.open('https://www.youtube.com/watch?v=' + trailer.key, '_blank'); };
+    }
+  }).catch(()=>{});
 
   if(opts.showActions !== false){
     const actions = document.createElement('div'); actions.className = 'card-actions';
@@ -677,12 +785,27 @@ function attachDrag(card, likeFlag, nopeFlag, onDecide){
 }
 
 function registerDecision(movie, outcome){
-  if(outcome === 'like'){ state.liked.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average, rating: 0 }); }
-  else if(outcome === 'dislike'){ state.disliked.push({ id: movie.id, title: movie.title }); }
-  else { state.watchlist.push({ id: movie.id, title: movie.title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average }); } // 'watchlist' = quiero verla
+  const mediaType = movie.media_type || state.mediaType;
+  const title = titleOf(movie);
+  if(outcome === 'like'){
+    state.liked.push({ id: movie.id, title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average, rating: 0, media_type: mediaType });
+    scoreCreditsForLike(movie); // en segundo plano: aprende actor/director principal de esta peli
+  }
+  else if(outcome === 'dislike'){ state.disliked.push({ id: movie.id, title, media_type: mediaType }); }
+  else { state.watchlist.push({ id: movie.id, title, poster_path: movie.poster_path, genre_ids: movie.genre_ids, vote_average: movie.vote_average, media_type: mediaType }); } // 'watchlist' = quiero verla
   state.lastSwipedMovie = movie;
   recomputeGenreScores();
   saveTaste();
+}
+
+async function scoreCreditsForLike(movie){
+  try{
+    const data = await tmdb(mt(movie.media_type).credits(movie.id));
+    (data.cast||[]).slice(0,3).forEach(c => { state.actorScores[c.id] = (state.actorScores[c.id]||0) + 2; });
+    const director = (data.crew||[]).find(c => c.job === 'Director');
+    if(director){ state.directorScores[director.id] = (state.directorScores[director.id]||0) + 3; }
+    saveTaste();
+  }catch(e){ /* si falla, no pasa nada, seguimos con el resto de señales */ }
 }
 
 /* ---------- construcción de UI ---------- */
@@ -695,7 +818,8 @@ function render(){
   if(state.screen === 'loading') return renderLoading();
   if(state.screen === 'startup-error') return renderStartupError();
   if(state.screen === 'platforms') return renderPlatforms();
-  if(state.screen === 'quiz') return renderQuiz();
+  if(state.screen === 'quiz-movies') return renderQuizMovies();
+  if(state.screen === 'quiz-actors') return renderQuizActors();
   if(state.screen === 'swipe') return renderSwipe();
   if(state.screen === 'top') return renderTop();
   if(state.screen === 'games') return renderGames();
@@ -742,10 +866,8 @@ function renderPlatforms(){
     saveSettings();
     btn.textContent = 'Cargando...';
     try{
-      const data = await tmdb('/trending/movie/week', { language: 'es-ES' });
-      state.quizQueue = (data.results||[]).filter(m=>m.poster_path).slice(0,8);
-      state.quizIndex = 0;
-      state.screen = 'quiz';
+      await ensureQuizMoviePool();
+      state.screen = 'quiz-movies';
       render();
     }catch(e){
       state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render();
@@ -755,33 +877,115 @@ function renderPlatforms(){
   app.appendChild(wrap);
 }
 
-function renderQuiz(){
+async function ensureQuizMoviePool(){
+  const [pop1, pop2, top1] = await Promise.all([
+    tmdb('/movie/popular', { language:'es-ES', page:1 }),
+    tmdb('/movie/popular', { language:'es-ES', page:2 }),
+    tmdb('/movie/top_rated', { language:'es-ES', page:1 }),
+  ]);
+  const merged = [...(pop1.results||[]), ...(pop2.results||[]), ...(top1.results||[])].map(m => ({ ...m, media_type: 'movie' }));
+  const seen = new Set();
+  const unique = merged.filter(m => { if(!m.poster_path || seen.has(m.id)) return false; seen.add(m.id); return true; });
+  // barajar y quedarnos con 18, para no repetir siempre el mismo orden
+  for(let i = unique.length - 1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [unique[i],unique[j]] = [unique[j],unique[i]]; }
+  state.quizMoviePool = unique.slice(0, 18);
+  state.quizMovieSelected = [];
+}
+
+function renderQuizMovies(){
   const wrap = el('div');
-  wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Antes de nada...</div>`));
-  wrap.appendChild(el('p','lead','Puntúa 8 títulos populares para que la primera tanda de recomendaciones ya vaya afinada. Si te llama la atención pero no la has visto, guárdala con el reloj 🕐 — no cuenta como que no te gusta.'));
+  wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Elige tus gustos</div>`));
+  wrap.appendChild(el('p','lead','Toca entre 3 y 5 películas que te gusten (da igual si las has visto o no, esto es para conocer tu estilo). Cuantas más marques, mejor arrancarán tus recomendaciones.'));
 
-  const progress = el('div','quiz-progress');
-  for(let i=0;i<state.quizQueue.length;i++){ progress.appendChild(el('span', i < state.quizIndex ? 'done' : '')); }
-  wrap.appendChild(progress);
+  const counter = el('div','select-counter', `<b>${state.quizMovieSelected.length}</b> de 5 seleccionadas (mínimo 3)`);
+  wrap.appendChild(counter);
 
-  const stack = el('div','stack');
-  const movie = state.quizQueue[state.quizIndex];
-  if(!movie){
-    stack.appendChild(el('div','empty-state', `<div class="display">¡Listo!</div><p>Vamos a por tus recomendaciones.</p>`));
-  } else {
-    stack.appendChild(buildCard(movie, (outcome) => {
-      registerDecision(movie, outcome);
-      state.quizIndex += 1;
-      render();
-    }));
-  }
-  wrap.appendChild(stack);
+  const grid = el('div','select-grid');
+  state.quizMoviePool.forEach(m => {
+    const selected = state.quizMovieSelected.includes(m.id);
+    const tile = el('div','select-tile' + (selected ? ' selected' : ''));
+    tile.innerHTML = `<img src="${posterUrl(m.poster_path,'w300')}"><div class="tile-label">${m.title}</div>`;
+    tile.onclick = () => {
+      const i = state.quizMovieSelected.indexOf(m.id);
+      if(i >= 0){ state.quizMovieSelected.splice(i,1); }
+      else { if(state.quizMovieSelected.length >= 5) return; state.quizMovieSelected.push(m.id); }
+      renderQuizMovies();
+    };
+    grid.appendChild(tile);
+  });
+  wrap.appendChild(grid);
 
-  if(!movie){
-    const btn = el('button','btn','Ver mis recomendaciones');
-    btn.onclick = async () => { state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); };
-    wrap.appendChild(btn);
-  }
+  const btn = el('button','btn', 'Continuar');
+  const ok = state.quizMovieSelected.length >= 3;
+  btn.disabled = !ok;
+  btn.onclick = async () => {
+    state.quizMoviePool.filter(m => state.quizMovieSelected.includes(m.id)).forEach(m => registerDecision(m, 'like'));
+    btn.textContent = 'Cargando...';
+    try{ await ensureQuizActorPool(); state.screen = 'quiz-actors'; render(); }
+    catch(e){ state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); }
+  };
+  wrap.appendChild(btn);
+
+  const skip = el('a','link','Prefiero saltarme esto →');
+  skip.style.cssText = 'display:block; text-align:center; margin-top:14px;';
+  skip.onclick = async () => { state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); };
+  wrap.appendChild(skip);
+
+  app.appendChild(wrap);
+}
+
+async function ensureQuizActorPool(){
+  const [p1, p2] = await Promise.all([
+    tmdb('/person/popular', { language:'es-ES', page:1 }),
+    tmdb('/person/popular', { language:'es-ES', page:2 }),
+  ]);
+  const merged = [...(p1.results||[]), ...(p2.results||[])];
+  const seen = new Set();
+  const unique = merged.filter(p => { if(!p.profile_path || p.known_for_department !== 'Acting' || seen.has(p.id)) return false; seen.add(p.id); return true; });
+  for(let i = unique.length - 1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [unique[i],unique[j]] = [unique[j],unique[i]]; }
+  state.quizActorPool = unique.slice(0, 16);
+  state.quizActorSelected = [];
+}
+
+function renderQuizActors(){
+  const wrap = el('div');
+  wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">¿Y qué actores?</div>`));
+  wrap.appendChild(el('p','lead','Elige entre 2 y 4 actores o actrices que te gusten. Lo usamos para priorizar películas suyas en tus recomendaciones.'));
+
+  const counter = el('div','select-counter', `<b>${state.quizActorSelected.length}</b> de 4 seleccionados (mínimo 2)`);
+  wrap.appendChild(counter);
+
+  const grid = el('div','select-grid');
+  state.quizActorPool.forEach(p => {
+    const selected = state.quizActorSelected.includes(p.id);
+    const tile = el('div','select-tile actor' + (selected ? ' selected' : ''));
+    tile.innerHTML = `<img src="${posterUrl(p.profile_path,'w300')}"><div class="tile-label">${p.name}</div>`;
+    tile.onclick = () => {
+      const i = state.quizActorSelected.indexOf(p.id);
+      if(i >= 0){ state.quizActorSelected.splice(i,1); }
+      else { if(state.quizActorSelected.length >= 4) return; state.quizActorSelected.push(p.id); }
+      renderQuizActors();
+    };
+    grid.appendChild(tile);
+  });
+  wrap.appendChild(grid);
+
+  const btn = el('button','btn', 'Ver mis recomendaciones');
+  const ok = state.quizActorSelected.length >= 2;
+  btn.disabled = !ok;
+  btn.onclick = async () => {
+    state.likedActors = state.quizActorPool.filter(p => state.quizActorSelected.includes(p.id)).map(p => ({ id:p.id, name:p.name, profile_path:p.profile_path }));
+    state.likedActors.forEach(a => { state.actorScores[a.id] = (state.actorScores[a.id]||0) + 5; });
+    saveTaste();
+    state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render();
+  };
+  wrap.appendChild(btn);
+
+  const skip = el('a','link','Prefiero saltarme esto →');
+  skip.style.cssText = 'display:block; text-align:center; margin-top:14px;';
+  skip.onclick = async () => { state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); };
+  wrap.appendChild(skip);
+
   app.appendChild(wrap);
 }
 
@@ -790,6 +994,22 @@ function renderSwipe(){
   const header = el('div','marquee');
   header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Para ti</div>`;
   wrap.appendChild(header);
+
+  const typeTabs = el('div');
+  typeTabs.style.cssText = 'display:flex; gap:8px; margin-bottom:14px;';
+  Object.entries(MEDIA).forEach(([key,cfg]) => {
+    const tab = el('div','genre-pill', `${cfg.icon} ${cfg.label}`);
+    tab.style.cssText = 'cursor:pointer; padding:7px 14px; font-size:13px;' + (state.mediaType===key ? 'background:var(--gold-dim); color:var(--gold);' : '');
+    tab.onclick = async () => {
+      if(state.mediaType === key) return;
+      switchMediaType(key);
+      render();
+      if(!state.current){ await ensureQueue(); state.current = state.queue[0] || null; }
+      if(state.screen === 'swipe') render();
+    };
+    typeTabs.appendChild(tab);
+  });
+  wrap.appendChild(typeTabs);
 
   const stack = el('div','stack');
   if(!state.current){
@@ -808,7 +1028,7 @@ function renderSwipe(){
       const sample = state.debugSample;
       let raw = null;
       if(sample){
-        try{ raw = await tmdb(`/movie/${sample.movieId}/watch/providers`); }catch(e){ raw = { error: String(e) }; }
+        try{ raw = await tmdb(mt(sample.mediaType).providers(sample.movieId)); }catch(e){ raw = { error: String(e) }; }
       }
       const box = el('pre');
       box.style.cssText = 'background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:10px; white-space:pre-wrap; word-break:break-all; max-height:260px; overflow:auto; margin-top:10px; text-align:left;';
@@ -829,7 +1049,7 @@ function renderSwipe(){
   }
   wrap.appendChild(stack);
 
-  wrap.appendChild(el('div','footer-note', `Filtrando por: ${state.platforms.map(p=>PROVIDER_QUERY[p].label).join(', ')}`));
+  wrap.appendChild(el('div','footer-note', `Filtrando por: ${state.platforms.map(p=>PROVIDER_QUERY[p].label).join(', ')} · usa ← →`));
   app.appendChild(wrap);
   appendBottomNav('swipe');
 }
@@ -847,23 +1067,30 @@ async function doSwipe(outcome){
 
 /* ---------- ficha de detalle ---------- */
 async function openDetail(movie){
+  const type = movie.media_type || state.mediaType;
+  const cfg = mt(type);
   const overlay = el('div','overlay active');
   const sheet = el('div','sheet');
-  sheet.innerHTML = `<div class="sheet-close"></div><div class="display" style="font-size:22px;">${movie.title}</div><p class="lead">Cargando ficha...</p>`;
+  sheet.innerHTML = `<div class="sheet-close"></div><div class="display" style="font-size:22px;">${titleOf(movie)}</div><p class="lead">Cargando ficha...</p>`;
   overlay.appendChild(sheet);
   overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
   app.appendChild(overlay);
 
   try{
-    const data = await tmdb(`/movie/${movie.id}`, { language: 'es-ES', append_to_response: 'credits,videos,recommendations' });
+    const data = await tmdb(cfg.detail(movie.id), { language: 'es-ES', append_to_response: 'credits,videos,recommendations' });
     const cast = (data.credits && data.credits.cast || []).slice(0,5).map(c=>c.name);
     const trailer = (data.videos && data.videos.results || []).find(v => v.site === 'YouTube' && v.type === 'Trailer');
-    const recs = (data.recommendations && data.recommendations.results || []).filter(m=>m.poster_path).slice(0,6);
+    const recs = (data.recommendations && data.recommendations.results || []).filter(m=>m.poster_path).slice(0,6).map(r => ({ ...r, media_type: type }));
+    const title = data.title || data.name;
+    const dateStr = data.release_date || data.first_air_date;
+    const durationStr = type === 'movie'
+      ? (data.runtime ? data.runtime+' min' : '')
+      : (data.number_of_seasons ? `${data.number_of_seasons} temporada${data.number_of_seasons>1?'s':''}` : '');
 
     sheet.innerHTML = `
       <div class="sheet-close"></div>
-      <div class="display" style="font-size:22px;">${data.title}</div>
-      <div class="card-meta">${(data.release_date||'').slice(0,4)} · ${data.runtime ? data.runtime+' min' : ''} · ${(data.genres||[]).map(g=>g.name).join(', ')}</div>
+      <div class="display" style="font-size:22px;">${title} ${type==='tv' ? '<span style=\"font-size:12px; color:var(--text-muted); font-family:\'Work Sans\',sans-serif;\">SERIE</span>' : ''}</div>
+      <div class="card-meta">${(dateStr||'').slice(0,4)} · ${durationStr} · ${(data.genres||[]).map(g=>g.name).join(', ')}</div>
       <div style="display:flex; gap:6px; flex-wrap:wrap; margin: 4px 0 10px;" data-detail-providers></div>
       <div class="stat-row">
         <div class="stat"><div class="label">TMDB</div><div class="value">★ ${data.vote_average ? data.vote_average.toFixed(1) : '—'}</div></div>
@@ -872,9 +1099,9 @@ async function openDetail(movie){
       ${trailer ? `<div class="trailer-link" data-trailer="${trailer.key}">▶ Ver tráiler</div>` : ''}
       <p class="overview" style="-webkit-line-clamp: unset;">${data.overview || 'Sin sinopsis disponible.'}</p>
       ${cast.length ? `<div class="field-label">Reparto</div><div class="cast-row">${cast.map(n=>`<span class="genre-pill">${n}</span>`).join('')}</div>` : ''}
-      ${recs.length ? `<div class="field-label">También te podría gustar</div><div class="rec-row">${recs.map(r=>`<div class="rec-item" data-rec-id="${r.id}"><img src="${posterUrl(r.poster_path,'w200')}"><div class="rec-title">${r.title}</div></div>`).join('')}</div>` : ''}
+      ${recs.length ? `<div class="field-label">También te podría gustar</div><div class="rec-row">${recs.map(r=>`<div class="rec-item" data-rec-id="${r.id}"><img src="${posterUrl(r.poster_path,'w200')}"><div class="rec-title">${titleOf(r)}</div></div>`).join('')}</div>` : ''}
     `;
-    renderProviderChips(sheet.querySelector('[data-detail-providers]'), movie.id);
+    renderProviderChips(sheet.querySelector('[data-detail-providers]'), movie.id, type);
 
     const tEl = sheet.querySelector('[data-trailer]');
     if(tEl) tEl.onclick = () => window.open('https://www.youtube.com/watch?v=' + tEl.dataset.trailer, '_blank');
@@ -884,9 +1111,13 @@ async function openDetail(movie){
         const rec = recs.find(r => String(r.id) === node.dataset.recId);
         if(!rec) return;
         overlay.remove();
-        state.current = rec;
-        state.queue.unshift(rec);
-        render();
+        if(rec.media_type === state.mediaType){
+          state.current = rec;
+          state.queue.unshift(rec);
+          render();
+        } else {
+          openDetail(rec);
+        }
       };
     });
   }catch(e){
@@ -928,7 +1159,7 @@ async function renderTop(){
     listWrap.appendChild(el('p','lead','Cargando...'));
     try{
       const data = await tmdb('/trending/movie/week', { language: 'es-ES' });
-      state.trendingList = (data.results||[]).filter(m=>m.poster_path).slice(0,20);
+      state.trendingList = (data.results||[]).filter(m=>m.poster_path).slice(0,20).map(m => ({ ...m, media_type: 'movie' }));
       listWrap.innerHTML = '';
       paintTopList(listWrap, state.trendingList);
     }catch(e){ listWrap.innerHTML = `<p class="lead">No se ha podido cargar la tendencia.</p>`; }
@@ -938,7 +1169,7 @@ async function renderTop(){
   if(state.topList){ paintTopList(listWrap, state.topList); return; }
   listWrap.appendChild(el('p','lead','Cargando...'));
   try{
-    const results = await fetchDiscoverPage(1, { sortBy: 'vote_average.desc', minVotes: 1000 });
+    const results = await fetchDiscoverPage(1, { sortBy: 'vote_average.desc', minVotes: 1000, mediaType: 'movie' });
     state.topList = results.filter(m=>m.poster_path).slice(0,20);
     listWrap.innerHTML = '';
     paintTopList(listWrap, state.topList);
@@ -956,14 +1187,14 @@ function paintTopList(container, list){
       <img class="list-poster" src="${posterUrl(m.poster_path,'w154')}">
       <div class="list-info">
         <div class="t">${m.title}</div>
-        <div class="m">${(m.release_date||'').slice(0,4)} · ${(m.genre_ids||[]).slice(0,2).map(g=>state.genreMap[g]).filter(Boolean).join(', ')}</div>
+        <div class="m">${(m.release_date||'').slice(0,4)} · ${(m.genre_ids||[]).slice(0,2).map(g=>genreMapFor('movie')[g]).filter(Boolean).join(', ')}</div>
         <div style="display:flex; gap:4px; margin-top:4px;" data-providers></div>
       </div>
       <div class="list-score">★ ${m.vote_average ? m.vote_average.toFixed(1) : '—'}</div>
     `;
     row.onclick = () => openDetail(m);
     container.appendChild(row);
-    renderProviderChips(row.querySelector('[data-providers]'), m.id);
+    renderProviderChips(row.querySelector('[data-providers]'), m.id, m.media_type || 'movie');
   });
 }
 
@@ -1007,7 +1238,7 @@ function renderMyList(){
     entries.forEach(([gid,score]) => {
       const row = el('div','genre-bar-row');
       const pct = Math.round((score/max)*100);
-      row.innerHTML = `<div style="display:flex; justify-content:space-between; font-size:12px;"><span>${state.genreMap[gid]||'—'}</span><span style="color:var(--text-muted)">${score}</span></div><div class="genre-bar-track"><div class="genre-bar-fill" style="width:${pct}%"></div></div>`;
+      row.innerHTML = `<div style="display:flex; justify-content:space-between; font-size:12px;"><span>${genreMapFor('movie')[gid]||genreMapFor('tv')[gid]||'—'}</span><span style="color:var(--text-muted)">${score}</span></div><div class="genre-bar-track"><div class="genre-bar-fill" style="width:${pct}%"></div></div>`;
       wrap.appendChild(row);
     });
   }
@@ -1018,9 +1249,10 @@ function renderMyList(){
   } else {
     state.watchlist.slice().reverse().forEach(m => {
       const row = el('div','list-row');
+      const icon = mt(m.media_type).icon;
       row.innerHTML = `
         <img class="list-poster" src="${m.poster_path ? posterUrl(m.poster_path,'w154') : ''}">
-        <div class="list-info"><div class="t">${m.title}</div><div class="m">${(m.vote_average? '★ '+m.vote_average.toFixed(1) : '')}</div></div>
+        <div class="list-info"><div class="t">${icon} ${m.title}</div><div class="m">${(m.vote_average? '★ '+m.vote_average.toFixed(1) : '')}</div></div>
         <span style="color:var(--teal); font-size:18px; padding:4px 6px; cursor:pointer;" data-watched title="Ya la vi, me gustó">♥</span>
         <span class="remove-x" data-remove title="Quitar">✕</span>
       `;
@@ -1028,7 +1260,7 @@ function renderMyList(){
       row.querySelector('[data-watched]').onclick = (e) => {
         e.stopPropagation();
         state.watchlist = state.watchlist.filter(x => x.id !== m.id);
-        state.liked.push({ id:m.id, title:m.title, poster_path:m.poster_path, genre_ids:m.genre_ids, vote_average:m.vote_average, rating:0 });
+        state.liked.push({ id:m.id, title:m.title, poster_path:m.poster_path, genre_ids:m.genre_ids, vote_average:m.vote_average, rating:0, media_type:m.media_type });
         recomputeGenreScores(); saveTaste(); renderMyList();
       };
       row.querySelector('[data-remove]').onclick = (e) => {
@@ -1040,16 +1272,17 @@ function renderMyList(){
     });
   }
 
-  wrap.appendChild(el('label','field-label','Películas que te han gustado'));
+  wrap.appendChild(el('label','field-label','Te ha gustado'));
   if(!state.liked.length){
     wrap.appendChild(el('div','empty-mini','Todavía no has marcado ninguna con ♥.'));
   } else {
     state.liked.slice().reverse().forEach(m => {
       const row = el('div','list-row');
+      const icon = mt(m.media_type).icon;
       const starsHtml = [1,2,3,4,5].map(n => `<span data-star="${n}" class="${ (m.rating||0) >= n ? 'on' : ''}">★</span>`).join('');
       row.innerHTML = `
         <img class="list-poster" src="${m.poster_path ? posterUrl(m.poster_path,'w154') : ''}">
-        <div class="list-info"><div class="t">${m.title}</div><div class="stars" data-stars>${starsHtml}</div></div>
+        <div class="list-info"><div class="t">${icon} ${m.title}</div><div class="stars" data-stars>${starsHtml}</div></div>
         <span class="remove-x" data-remove>✕</span>
       `;
       row.querySelectorAll('[data-star]').forEach(s => {
@@ -1349,6 +1582,14 @@ async function spinRoulette(){
   }catch(e){}
 }
 
+
+/* ---------- teclado: flechas izquierda/derecha para descartar/me gusta ---------- */
+document.addEventListener('keydown', (e) => {
+  if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if(state.screen === 'swipe' && state.current){
+    doSwipe(e.key === 'ArrowRight' ? 'like' : 'dislike');
+  }
+});
 
 /* ---------- arranque ---------- */
 async function init(){
