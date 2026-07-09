@@ -306,6 +306,12 @@
 
   .streak-badge{ display:inline-flex; align-items:center; gap:6px; background: var(--gold-dim); color: var(--gold); font-size:12px; font-weight:600; padding:5px 12px; border-radius:20px; margin-bottom:10px; }
 
+  .media-toggle{ display:flex; gap:4px; background: var(--surface); border:1px solid var(--border); border-radius:14px; padding:4px; margin-bottom:16px; }
+  .media-toggle .seg{ flex:1; text-align:center; padding:12px 10px; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; color: var(--text-muted); transition: background .12s ease, color .12s ease; }
+  .media-toggle .seg .ic{ font-size:16px; margin-right:6px; }
+  .media-toggle .seg.active{ background: linear-gradient(135deg, var(--gold), #D99A1F); color:#1A1200; box-shadow: 0 4px 14px #E8B23D33; }
+  .media-toggle .seg:active{ transform: scale(0.98); }
+
   .select-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 18px; }
   .select-tile{ position:relative; cursor:pointer; border-radius:12px; overflow:hidden; border:3px solid transparent; background:var(--surface-2); }
   .select-tile img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; opacity:0.82; transition: opacity .15s; }
@@ -417,15 +423,15 @@ let state = {
   page: 1,
   quizQueue: [],
   quizIndex: 0,
+  queueLoading: false,
   quizMoviePool: [],
   quizMovieSelected: [],
   quizActorPool: [],
   quizActorSelected: [],
   likedActors: [],   // [{id,name,profile_path}]
   likedDirectors: [],
-  topList: null,
-  topMode: 'rated',
-  trendingList: null,
+  topFilters: null,
+  topCache: {},
   gamePool: null,
   peoplePool: null,
   gameScreen: 'hub',
@@ -520,9 +526,10 @@ function selectedProviderIds(){ return state.platforms.map(p => state.providerId
 
 async function fetchDiscoverPage(page, opts={}){
   const cfg = mt(opts.mediaType);
+  const providerIds = opts.watchProviderIds || selectedProviderIds();
   const params = {
     watch_region: state.region,
-    with_watch_providers: selectedProviderIds().join('|'),
+    with_watch_providers: providerIds.join('|'),
     watch_monetization_types: 'flatrate',
     sort_by: opts.sortBy || 'popularity.desc',
     'vote_count.gte': opts.minVotes || 50,
@@ -870,7 +877,7 @@ function renderPlatforms(){
       state.screen = 'quiz-movies';
       render();
     }catch(e){
-      state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render();
+      await goToSwipe();
     }
   };
   wrap.appendChild(btn);
@@ -922,13 +929,13 @@ function renderQuizMovies(){
     state.quizMoviePool.filter(m => state.quizMovieSelected.includes(m.id)).forEach(m => registerDecision(m, 'like'));
     btn.textContent = 'Cargando...';
     try{ await ensureQuizActorPool(); state.screen = 'quiz-actors'; render(); }
-    catch(e){ state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); }
+    catch(e){ await goToSwipe(); }
   };
   wrap.appendChild(btn);
 
   const skip = el('a','link','Prefiero saltarme esto →');
   skip.style.cssText = 'display:block; text-align:center; margin-top:14px;';
-  skip.onclick = async () => { state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); };
+  skip.onclick = async () => { await goToSwipe(); };
   wrap.appendChild(skip);
 
   app.appendChild(wrap);
@@ -977,13 +984,13 @@ function renderQuizActors(){
     state.likedActors = state.quizActorPool.filter(p => state.quizActorSelected.includes(p.id)).map(p => ({ id:p.id, name:p.name, profile_path:p.profile_path }));
     state.likedActors.forEach(a => { state.actorScores[a.id] = (state.actorScores[a.id]||0) + 5; });
     saveTaste();
-    state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render();
+    await goToSwipe();
   };
   wrap.appendChild(btn);
 
   const skip = el('a','link','Prefiero saltarme esto →');
   skip.style.cssText = 'display:block; text-align:center; margin-top:14px;';
-  skip.onclick = async () => { state.screen = 'swipe'; render(); await ensureQueue(); state.current = state.queue[0]||null; render(); };
+  skip.onclick = async () => { await goToSwipe(); };
   wrap.appendChild(skip);
 
   app.appendChild(wrap);
@@ -995,24 +1002,24 @@ function renderSwipe(){
   header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Para ti</div>`;
   wrap.appendChild(header);
 
-  const typeTabs = el('div');
-  typeTabs.style.cssText = 'display:flex; gap:8px; margin-bottom:14px;';
+  const typeTabs = el('div','media-toggle');
   Object.entries(MEDIA).forEach(([key,cfg]) => {
-    const tab = el('div','genre-pill', `${cfg.icon} ${cfg.label}`);
-    tab.style.cssText = 'cursor:pointer; padding:7px 14px; font-size:13px;' + (state.mediaType===key ? 'background:var(--gold-dim); color:var(--gold);' : '');
-    tab.onclick = async () => {
+    const seg = el('div','seg' + (state.mediaType===key ? ' active' : ''), `<span class="ic">${cfg.icon}</span>${cfg.label}`);
+    seg.onclick = async () => {
       if(state.mediaType === key) return;
       switchMediaType(key);
-      render();
-      if(!state.current){ await ensureQueue(); state.current = state.queue[0] || null; }
-      if(state.screen === 'swipe') render();
+      if(!state.current){ await goToSwipe(); }
+      else { render(); }
     };
-    typeTabs.appendChild(tab);
+    typeTabs.appendChild(seg);
   });
   wrap.appendChild(typeTabs);
 
   const stack = el('div','stack');
-  if(!state.current){
+  if(!state.current && state.queueLoading){
+    setBackdrop(null);
+    stack.appendChild(el('div','empty-state', `<div class="display">Buscando para ti...</div><p>Comprobando disponibilidad real en tus plataformas.</p>`));
+  } else if(!state.current){
     setBackdrop(null);
     const empty = el('div','empty-state', `<div class="display">Sin nada nuevo por ahora</div><p>Prueba a marcar más plataformas en "Mi lista" o vuelve en un rato.</p>`);
     stack.appendChild(empty);
@@ -1126,53 +1133,78 @@ async function openDetail(movie){
 }
 
 /* ---------- Top Películas ---------- */
+const TOP_SORTS = [
+  { key:'rated', label:'Mejor valoradas', sortBy:'vote_average.desc', minVotes:1000 },
+  { key:'recent', label:'Más recientes', sortBy:'primary_release_date.desc', minVotes:20 },
+  { key:'voted', label:'Más votadas', sortBy:'vote_count.desc', minVotes:1 },
+  { key:'trending', label:'Tendencia semanal', trending:true },
+];
+
 async function renderTop(){
   app.innerHTML = '';
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Top películas</div>`));
 
-  const tabs = el('div');
-  tabs.style.cssText = 'display:flex; gap:8px; margin-bottom:14px;';
-  const tabRated = el('div', 'genre-pill', 'Mejor valoradas');
-  const tabTrend = el('div', 'genre-pill', 'Tendencia esta semana');
-  [tabRated, tabTrend].forEach(t => { t.style.cursor = 'pointer'; t.style.padding = '7px 14px'; });
-  function paintTabs(){
-    tabRated.style.background = state.topMode !== 'trending' ? 'var(--gold-dim)' : 'var(--surface-2)';
-    tabRated.style.color = state.topMode !== 'trending' ? 'var(--gold)' : 'var(--text-muted)';
-    tabTrend.style.background = state.topMode === 'trending' ? 'var(--gold-dim)' : 'var(--surface-2)';
-    tabTrend.style.color = state.topMode === 'trending' ? 'var(--gold)' : 'var(--text-muted)';
-  }
-  paintTabs();
-  tabRated.onclick = () => { state.topMode = 'rated'; renderTop(); };
-  tabTrend.onclick = () => { state.topMode = 'trending'; renderTop(); };
-  tabs.appendChild(tabRated); tabs.appendChild(tabTrend);
-  wrap.appendChild(tabs);
+  if(!state.topFilters){ state.topFilters = { sortKey: 'rated', platforms: state.platforms.slice() }; }
+  const filters = state.topFilters;
 
-  wrap.appendChild(el('p','lead', state.topMode === 'trending' ? 'Lo más visto esta semana en todo TMDB (no filtrado por plataforma).' : 'Mejor valoradas, disponibles en tus plataformas.'));
+  wrap.appendChild(el('label','field-label','Ordenar por'));
+  const sortRow = el('div');
+  sortRow.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;';
+  TOP_SORTS.forEach(s => {
+    const chip = el('div','genre-pill', s.label);
+    chip.style.cssText = 'cursor:pointer; padding:7px 14px; font-size:13px;' + (filters.sortKey===s.key ? 'background:var(--gold-dim); color:var(--gold);' : '');
+    chip.onclick = () => { filters.sortKey = s.key; state.topCache = {}; renderTop(); };
+    sortRow.appendChild(chip);
+  });
+  wrap.appendChild(sortRow);
+
+  wrap.appendChild(el('label','field-label','Plataformas a incluir'));
+  const platRow = el('div','platform-grid');
+  Object.entries(PROVIDER_QUERY).forEach(([key,cfg]) => {
+    const card = el('div','platform-card' + (filters.platforms.includes(key) ? ' selected':''));
+    card.innerHTML = `<span class="platform-dot" style="background:${cfg.dot}"></span><span class="platform-name">${cfg.label}</span><span class="platform-check">✓</span>`;
+    card.onclick = () => {
+      const i = filters.platforms.indexOf(key);
+      if(i>=0) filters.platforms.splice(i,1); else filters.platforms.push(key);
+      state.topCache = {};
+      renderTop();
+    };
+    platRow.appendChild(card);
+  });
+  wrap.appendChild(platRow);
+
+  const activeSort = TOP_SORTS.find(s => s.key === filters.sortKey);
+  wrap.appendChild(el('p','lead', activeSort.trending ? 'Lo más visto esta semana en todo TMDB (no filtrado por plataforma, pero cada fila te dice si está en las tuyas).' : `${activeSort.label}, disponibles en las plataformas marcadas arriba.`));
+
   const listWrap = el('div');
   wrap.appendChild(listWrap);
   app.appendChild(wrap);
   appendBottomNav('top');
 
-  if(state.topMode === 'trending'){
-    if(state.trendingList){ paintTopList(listWrap, state.trendingList); return; }
-    listWrap.appendChild(el('p','lead','Cargando...'));
-    try{
-      const data = await tmdb('/trending/movie/week', { language: 'es-ES' });
-      state.trendingList = (data.results||[]).filter(m=>m.poster_path).slice(0,20).map(m => ({ ...m, media_type: 'movie' }));
-      listWrap.innerHTML = '';
-      paintTopList(listWrap, state.trendingList);
-    }catch(e){ listWrap.innerHTML = `<p class="lead">No se ha podido cargar la tendencia.</p>`; }
+  if(!filters.platforms.length && !activeSort.trending){
+    listWrap.appendChild(el('div','empty-mini','Marca al menos una plataforma arriba para ver resultados.'));
     return;
   }
 
-  if(state.topList){ paintTopList(listWrap, state.topList); return; }
+  if(!state.topCache) state.topCache = {};
+  const cacheKey = `${filters.sortKey}:${filters.platforms.slice().sort().join(',')}`;
+  if(state.topCache[cacheKey]){ paintTopList(listWrap, state.topCache[cacheKey]); return; }
+
   listWrap.appendChild(el('p','lead','Cargando...'));
   try{
-    const results = await fetchDiscoverPage(1, { sortBy: 'vote_average.desc', minVotes: 1000, mediaType: 'movie' });
-    state.topList = results.filter(m=>m.poster_path).slice(0,20);
+    let results;
+    if(activeSort.trending){
+      const data = await tmdb('/trending/movie/week', { language: 'es-ES' });
+      results = (data.results||[]).filter(m=>m.poster_path).map(m => ({ ...m, media_type: 'movie' }));
+    } else {
+      const providerIds = filters.platforms.map(p => state.providerIds[p]).filter(Boolean);
+      results = await fetchDiscoverPage(1, { sortBy: activeSort.sortBy, minVotes: activeSort.minVotes, mediaType: 'movie', watchProviderIds: providerIds });
+      results = results.filter(m=>m.poster_path);
+    }
+    state.topCache[cacheKey] = results.slice(0, 20);
     listWrap.innerHTML = '';
-    paintTopList(listWrap, state.topList);
+    paintTopList(listWrap, state.topCache[cacheKey]);
   }catch(e){
     listWrap.innerHTML = `<p class="lead">No se ha podido cargar el ranking.</p>`;
   }
@@ -1223,7 +1255,7 @@ function renderMyList(){
       const i = state.platforms.indexOf(key);
       if(i>=0) state.platforms.splice(i,1); else state.platforms.push(key);
       saveSettings();
-      state.queue = []; state.current = null; state.topList = null;
+      state.queue = []; state.current = null; state.topCache = {};
       renderMyList();
     };
     grid.appendChild(card);
@@ -1318,8 +1350,8 @@ function appendBottomNav(active){
   items.forEach(it => {
     const btn = el('div', 'nav-item' + (active === it.key ? ' active' : ''), `<div class="ic">${it.icon}</div><div>${it.label}</div>`);
     btn.onclick = async () => {
+      if(it.key === 'swipe' && !state.current){ await goToSwipe(); return; }
       state.screen = it.key;
-      if(it.key === 'swipe' && !state.current){ render(); await ensureQueue(); state.current = state.queue[0]||null; }
       render();
     };
     inner.appendChild(btn);
@@ -1591,6 +1623,16 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+async function goToSwipe(){
+  state.screen = 'swipe';
+  state.queueLoading = true;
+  render();
+  await ensureQueue();
+  state.queueLoading = false;
+  state.current = state.queue[0] || null;
+  render();
+}
+
 /* ---------- arranque ---------- */
 async function init(){
   loadStorage();
@@ -1601,11 +1643,7 @@ async function init(){
     state.screen = 'startup-error'; render(); return;
   }
   if(!state.platforms.length){ state.screen = 'platforms'; render(); return; }
-  state.screen = 'swipe';
-  render();
-  await ensureQueue();
-  state.current = state.queue[0] || null;
-  render();
+  await goToSwipe();
 }
 init();
 </script>
