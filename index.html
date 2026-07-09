@@ -506,9 +506,15 @@ async function ensureQueue(){
     const opts = useBias ? { genre: topGenre() } : pickExplorationMode();
     const results = await fetchDiscoverPage(state.page, opts);
     state.page += 1;
-    const fresh = results.filter(m => !seen.has(m.id) && m.poster_path);
-    fresh.forEach(m => seen.add(m.id));
-    state.queue.push(...fresh);
+    const candidates = results.filter(m => !seen.has(m.id) && m.poster_path);
+    candidates.forEach(m => seen.add(m.id));
+    // el filtro de "discover" a veces no coincide con la disponibilidad real por título:
+    // se comprueba cada candidata de verdad antes de enseñarla
+    const checked = await Promise.all(candidates.map(async m => {
+      const providers = await fetchProviders(m.id);
+      return matchOwnedPlatforms(providers).length ? m : null;
+    }));
+    state.queue.push(...checked.filter(Boolean));
     if(results.length === 0) break;
   }
 }
