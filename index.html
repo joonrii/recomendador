@@ -541,7 +541,7 @@ function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size
 async function fetchProviders(movieId){
   if(state.providerCache[movieId]) return state.providerCache[movieId];
   try{
-    const data = await tmdb(`/movie/${movieId}/watch_providers`);
+    const data = await tmdb(`/movie/${movieId}/watch/providers`);
     const flatrate = (data.results && data.results[state.region] && data.results[state.region].flatrate) || [];
     state.providerCache[movieId] = flatrate;
     return flatrate;
@@ -808,7 +808,7 @@ function renderSwipe(){
       const sample = state.debugSample;
       let raw = null;
       if(sample){
-        try{ raw = await tmdb(`/movie/${sample.movieId}/watch_providers`); }catch(e){ raw = { error: String(e) }; }
+        try{ raw = await tmdb(`/movie/${sample.movieId}/watch/providers`); }catch(e){ raw = { error: String(e) }; }
       }
       const box = el('pre');
       box.style.cssText = 'background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:10px; white-space:pre-wrap; word-break:break-all; max-height:260px; overflow:auto; margin-top:10px; text-align:left;';
