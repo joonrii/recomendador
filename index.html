@@ -132,6 +132,7 @@
   }
   .btn:active{ transform: scale(0.98); }
   .btn[disabled]{ opacity:0.4; box-shadow:none; cursor:default; }
+  .btn.ghost{ background: var(--surface-2); color: var(--text-muted); box-shadow:none; border:1px solid var(--border); font-weight:500; }
   a.link{ color: var(--gold); cursor:pointer; font-size: 13px; }
 
   .platform-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
@@ -500,6 +501,8 @@ function topGenre(){
 async function ensureQueue(){
   const seen = new Set([...state.liked.map(m=>m.id), ...state.disliked.map(m=>m.id), ...state.watchlist.map(m=>m.id), ...state.queue.map(m=>m.id)]);
   let guard = 0;
+  let totalChecked = 0, totalConfirmed = 0;
+  let fallbackPool = [];
   while(state.queue.length < 5 && guard < 20){
     guard++;
     const useBias = state.liked.length >= 4 && Math.random() < 0.5;
@@ -508,14 +511,27 @@ async function ensureQueue(){
     state.page += 1;
     const candidates = results.filter(m => !seen.has(m.id) && m.poster_path);
     candidates.forEach(m => seen.add(m.id));
+    fallbackPool.push(...candidates);
     // el filtro de "discover" a veces no coincide con la disponibilidad real por título:
     // se comprueba cada candidata de verdad antes de enseñarla
     const checked = await Promise.all(candidates.map(async m => {
       const providers = await fetchProviders(m.id);
-      return matchOwnedPlatforms(providers).length ? m : null;
+      totalChecked++;
+      const owned = matchOwnedPlatforms(providers).length > 0;
+      if(owned) totalConfirmed++;
+      // guardamos una muestra cruda para poder diagnosticar si algo falla sistemáticamente
+      if(!state.debugSample) state.debugSample = { movieId: m.id, title: m.title, providers, ownedPlatforms: state.platforms.slice() };
+      return owned ? m : null;
     }));
     state.queue.push(...checked.filter(Boolean));
     if(results.length === 0) break;
+  }
+  state.lastQueueDebug = { totalChecked, totalConfirmed };
+  // salvaguarda: si la comprobación estricta se queda sistemáticamente a cero (posible fallo puntual
+  // al consultar disponibilidad), no dejamos al usuario sin nada — usamos el filtro de discover tal cual.
+  if(state.queue.length === 0 && totalChecked > 0 && totalConfirmed === 0 && fallbackPool.length){
+    state.queue.push(...fallbackPool.slice(0, 5));
+    state.usingFallback = true;
   }
 }
 
@@ -778,7 +794,28 @@ function renderSwipe(){
   const stack = el('div','stack');
   if(!state.current){
     setBackdrop(null);
-    stack.appendChild(el('div','empty-state', `<div class="display">Sin nada nuevo por ahora</div><p>Prueba a marcar más plataformas en "Mi lista" o vuelve en un rato.</p>`));
+    const empty = el('div','empty-state', `<div class="display">Sin nada nuevo por ahora</div><p>Prueba a marcar más plataformas en "Mi lista" o vuelve en un rato.</p>`);
+    stack.appendChild(empty);
+    const dbg = state.lastQueueDebug;
+    if(dbg){
+      const info = el('p','lead', `Diagnóstico: se comprobaron ${dbg.totalChecked} candidatas, ${dbg.totalConfirmed} coincidían con tus plataformas.`);
+      info.style.fontSize = '11px'; info.style.marginTop = '14px';
+      empty.appendChild(info);
+    }
+    const dbgBtn = el('button','btn ghost','Ver diagnóstico técnico');
+    dbgBtn.onclick = async () => {
+      dbgBtn.textContent = 'Consultando...';
+      const sample = state.debugSample;
+      let raw = null;
+      if(sample){
+        try{ raw = await tmdb(`/movie/${sample.movieId}/watch_providers`); }catch(e){ raw = { error: String(e) }; }
+      }
+      const box = el('pre');
+      box.style.cssText = 'background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:10px; white-space:pre-wrap; word-break:break-all; max-height:260px; overflow:auto; margin-top:10px; text-align:left;';
+      box.textContent = JSON.stringify({ tusPlataformas: state.platforms, muestra: sample, respuestaCruda: raw }, null, 2);
+      dbgBtn.replaceWith(box);
+    };
+    empty.appendChild(dbgBtn);
   } else {
     const prevPeek = state.lastSwipedMovie;
     const nextPeek = state.queue[1];
