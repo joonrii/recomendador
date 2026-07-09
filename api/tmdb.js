@@ -3,7 +3,7 @@
 // La clave de API vive SOLO aquí (variable de entorno en el panel de Vercel),
 // nunca llega al navegador del usuario.
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'TMDB_API_KEY no configurada en Vercel (Settings → Environment Variables).' });
@@ -29,4 +29,4 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(502).json({ error: 'No se ha podido contactar con TMDB.' });
   }
-}
+};
