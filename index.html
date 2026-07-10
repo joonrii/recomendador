@@ -58,7 +58,7 @@
     --violet: #7C6CE8;
   }
   *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html,body{ margin:0; padding:0; min-height:100%; }
+  html,body{ margin:0; padding:0; min-height:100%; overflow-x:hidden; }
   body{
     background:
       radial-gradient(700px circle at 88% 8%, #7C6CE83d, transparent 60%),
@@ -383,7 +383,12 @@
   }
 
   /* ---------- landing de entrada: glass bento + pared de pósters ---------- */
-  .lp{ font-family:'Space Grotesk',sans-serif; margin:-20px -18px -90px; position:relative; min-height:calc(100vh + 90px); overflow:hidden; }
+  .lp{
+    font-family:'Space Grotesk',sans-serif; position:relative; overflow:hidden;
+    left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; width:100vw;
+    margin-top:-20px; margin-bottom:-90px; min-height:calc(100vh + 90px);
+  }
+  .lp-inner{ max-width:640px; margin:0 auto; }
   .lp-wall{ position:absolute; inset:0; display:flex; flex-direction:column; gap:12px; padding:12px; z-index:0; opacity:0.5; }
   .lp-row{ display:flex; gap:12px; flex-shrink:0; }
   .lp-row.r1{ animation: lpSlideLeft 50s linear infinite; }
@@ -965,13 +970,13 @@ function renderLanding(){
   const lp = el('div','lp');
   const wall = el('div','lp-wall'); wall.setAttribute('aria-hidden','true');
   const rowDefs = [
-    { cls:'lp-row r1', start:0 }, { cls:'lp-row r2', start:8 }, { cls:'lp-row r3', start:16 }
+    { cls:'lp-row r1', start:0 }, { cls:'lp-row r2', start:12 }, { cls:'lp-row r3', start:6 }
   ];
   const posters = state.landingPosters || [];
   rowDefs.forEach(def => {
     const row = el('div', def.cls);
-    const slice = posters.length ? posters.slice(def.start, def.start+8) : [];
-    const items = slice.length ? slice : new Array(8).fill(null);
+    const slice = posters.length ? posters.slice(def.start, def.start+12) : [];
+    const items = slice.length ? slice : new Array(12).fill(null);
     const doubled = [...items, ...items];
     doubled.forEach(url => {
       const p = el('div','lp-poster');
@@ -984,27 +989,23 @@ function renderLanding(){
   lp.appendChild(el('div','lp-mesh'));
 
   const content = el('div','lp-content');
-  content.innerHTML = `
+  const inner = el('div','lp-inner');
+  inner.innerHTML = `
     <div class="lp-pill">✨ <b>Recomendaciones reales</b> — cruzadas con tus plataformas</div>
     <h1>Encuentra tu<br><span class="grad">próxima obsesión</span></h1>
     <p class="lp-sub">Un test rápido para conocer tus gustos de verdad, y a partir de ahí solo te enseñamos lo que puedes ver ya en Netflix, HBO Max, Disney+ o Prime Video.</p>
   `;
   const cta = el('button','lp-cta','Comienza tu test →');
   cta.onclick = () => { state.screen = 'platforms'; render(); };
-  content.appendChild(cta);
-  content.insertAdjacentHTML('beforeend', `
+  inner.appendChild(cta);
+  inner.insertAdjacentHTML('beforeend', `
     <div class="lp-steps">
       <span><b>1.</b> Elige tus plataformas</span>
       <span><b>2.</b> Marca lo que te gusta</span>
       <span><b>3.</b> Recibe tus recomendaciones</span>
     </div>
-    <div class="lp-bento">
-      <div class="lp-bcard lp-b1"><span>Recomendaciones que aprenden de ti</span></div>
-      <div class="lp-bcard lp-b2"><span>Retos de cine</span></div>
-      <div class="lp-bcard lp-b3"><span>Top semanal por plataforma</span></div>
-      <div class="lp-bcard lp-b4"><span>Películas y series</span></div>
-    </div>
   `);
+  content.appendChild(inner);
   lp.appendChild(content);
   app.appendChild(lp);
 }
