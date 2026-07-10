@@ -679,7 +679,8 @@ async function ensureBatch(size){
   let fallbackPool = [];
   while(state.batch.length < size && guard < 20){
     guard++;
-    const results = await pickCandidates(state.page);
+    let results = [];
+    try{ results = await pickCandidates(state.page); }catch(e){ results = []; }
     state.page += 1;
     const candidates = results.filter(m => !seen.has(m.id) && m.poster_path);
     candidates.forEach(m => seen.add(m.id));
@@ -696,7 +697,6 @@ async function ensureBatch(size){
       return owned ? m : null;
     }));
     state.batch.push(...checked.filter(Boolean));
-    if(results.length === 0) break;
   }
   state.lastQueueDebug = { totalChecked, totalConfirmed };
   // salvaguarda: si la comprobación estricta se queda sistemáticamente a cero (posible fallo puntual
