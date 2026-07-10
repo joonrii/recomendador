@@ -327,6 +327,12 @@
   .select-tile .tile-label{ position:absolute; bottom:0; left:0; right:0; padding:6px 6px 5px; font-size:10.5px; line-height:1.2;
     background:linear-gradient(transparent, rgba(0,0,0,0.85)); color:#fff; }
   .select-tile.actor img{ aspect-ratio:1/1; object-fit:cover; }
+  .tile-rating{ position:absolute; top:6px; left:6px; background:rgba(20,20,26,0.8); color:var(--gold); font-size:10px; font-weight:700; padding:3px 7px; border-radius:20px; }
+  .tile-info-btn{
+    position:absolute; bottom:26px; right:6px; width:22px; height:22px; border-radius:50%;
+    background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; font-family:'Work Sans',sans-serif; z-index:2;
+  }
   .select-counter{ position:sticky; top:0; text-align:center; font-size:13px; color: var(--text-muted); margin-bottom:4px; }
   .select-counter b{ color: var(--gold); }
 
@@ -427,6 +433,9 @@ let state = {
   quizQueue: [],
   quizIndex: 0,
   queueLoading: false,
+  batch: [],
+  batchSelected: [],
+  batchSeen: { movie: new Set(), tv: new Set() },
   quizMoviePool: [],
   quizMovieSelected: [],
   quizActorPool: [],
@@ -487,12 +496,12 @@ function genreMapFor(type){ return state.genreMaps[type || state.mediaType] || {
 
 function switchMediaType(newType){
   if(newType === state.mediaType) return;
-  state.queueStash[state.mediaType] = state.queue;
-  state.currentStash[state.mediaType] = state.current;
+  state.queueStash[state.mediaType] = state.batch;
+  state.currentStash[state.mediaType] = state.batchSelected;
   state.pageStash[state.mediaType] = state.page;
   state.mediaType = newType;
-  state.queue = state.queueStash[newType] || [];
-  state.current = state.currentStash[newType] || null;
+  state.batch = state.queueStash[newType] || [];
+  state.batchSelected = state.currentStash[newType] || [];
   state.page = state.pageStash[newType] || 1;
 }
 
@@ -605,13 +614,15 @@ async function pickCandidates(page){
   return fetchDiscoverPage(page, pickExplorationMode());
 }
 
-async function ensureQueue(){
+async function ensureBatch(size){
+  size = size || 12;
   const sameType = m => (m.media_type||'movie') === state.mediaType;
-  const seen = new Set([...state.liked.filter(sameType).map(m=>m.id), ...state.disliked.filter(sameType).map(m=>m.id), ...state.watchlist.filter(sameType).map(m=>m.id), ...state.queue.map(m=>m.id)]);
+  const seenSet = state.batchSeen[state.mediaType];
+  const seen = new Set([...state.liked.filter(sameType).map(m=>m.id), ...state.disliked.filter(sameType).map(m=>m.id), ...state.watchlist.filter(sameType).map(m=>m.id), ...state.batch.map(m=>m.id), ...seenSet]);
   let guard = 0;
   let totalChecked = 0, totalConfirmed = 0;
   let fallbackPool = [];
-  while(state.queue.length < 5 && guard < 20){
+  while(state.batch.length < size && guard < 20){
     guard++;
     const results = await pickCandidates(state.page);
     state.page += 1;
@@ -629,16 +640,26 @@ async function ensureQueue(){
       if(!state.debugSample) state.debugSample = { movieId: m.id, title: titleOf(m), mediaType: m.media_type, providers, ownedPlatforms: state.platforms.slice() };
       return owned ? m : null;
     }));
-    state.queue.push(...checked.filter(Boolean));
+    state.batch.push(...checked.filter(Boolean));
     if(results.length === 0) break;
   }
   state.lastQueueDebug = { totalChecked, totalConfirmed };
   // salvaguarda: si la comprobación estricta se queda sistemáticamente a cero (posible fallo puntual
   // al consultar disponibilidad), no dejamos al usuario sin nada — usamos el filtro de discover tal cual.
-  if(state.queue.length === 0 && totalChecked > 0 && totalConfirmed === 0 && fallbackPool.length){
-    state.queue.push(...fallbackPool.slice(0, 5));
+  if(state.batch.length === 0 && totalChecked > 0 && totalConfirmed === 0 && fallbackPool.length){
+    state.batch.push(...fallbackPool.slice(0, size));
     state.usingFallback = true;
   }
+}
+
+async function confirmBatch(){
+  const chosen = state.batch.filter(m => state.batchSelected.includes(m.id));
+  chosen.forEach(m => registerDecision(m, 'like'));
+  const seenSet = state.batchSeen[state.mediaType];
+  state.batch.forEach(m => seenSet.add(m.id)); // no repetir ninguna de este lote, elegida o no
+  state.batch = [];
+  state.batchSelected = [];
+  await goToSwipe();
 }
 
 /* ---------- swipe genérico (sirve para quiz y para la cola principal) ---------- */
@@ -1036,21 +1057,20 @@ function renderSwipe(){
     seg.onclick = async () => {
       if(state.mediaType === key) return;
       switchMediaType(key);
-      if(!state.current){ await goToSwipe(); }
+      if(!state.batch.length){ await goToSwipe(); }
       else { render(); }
     };
     typeTabs.appendChild(seg);
   });
   wrap.appendChild(typeTabs);
 
-  const stack = el('div','stack');
-  if(!state.current && state.queueLoading){
+  if(!state.batch.length && state.queueLoading){
     setBackdrop(null);
-    stack.appendChild(el('div','empty-state', `<div class="display">Buscando para ti...</div><p>Comprobando disponibilidad real en tus plataformas.</p>`));
-  } else if(!state.current){
+    wrap.appendChild(el('div','empty-state', `<div class="display">Buscando para ti...</div><p>Comprobando disponibilidad real en tus plataformas.</p>`));
+  } else if(!state.batch.length){
     setBackdrop(null);
     const empty = el('div','empty-state', `<div class="display">Sin nada nuevo por ahora</div><p>Prueba a marcar más plataformas en "Mi lista" o vuelve en un rato.</p>`);
-    stack.appendChild(empty);
+    wrap.appendChild(empty);
     const dbg = state.lastQueueDebug;
     if(dbg){
       const info = el('p','lead', `Diagnóstico: se comprobaron ${dbg.totalChecked} candidatas, ${dbg.totalConfirmed} coincidían con tus plataformas.`);
@@ -1072,32 +1092,42 @@ function renderSwipe(){
     };
     empty.appendChild(dbgBtn);
   } else {
-    const prevPeek = state.lastSwipedMovie;
-    const nextPeek = state.queue[1];
-    if(prevPeek && prevPeek.poster_path){
-      stack.appendChild(el('div','peek-card left', `<img src="${posterUrl(prevPeek.poster_path,'w200')}">`));
-    }
-    if(nextPeek && nextPeek.poster_path){
-      stack.appendChild(el('div','peek-card right', `<img src="${posterUrl(nextPeek.poster_path,'w200')}">`));
-    }
-    stack.appendChild(buildCard(state.current, doSwipe));
-  }
-  wrap.appendChild(stack);
+    setBackdrop(null);
+    wrap.appendChild(el('p','lead','Toca las que te llamen la atención (da igual si las has visto o no). Para info, tráiler o reparto, toca la "i".'));
+    const counter = el('div','select-counter', `<b>${state.batchSelected.length}</b> seleccionadas de ${state.batch.length}`);
+    wrap.appendChild(counter);
 
-  wrap.appendChild(el('div','footer-note', `Filtrando por: ${state.platforms.map(p=>PROVIDER_QUERY[p].label).join(', ')} · usa ← →`));
+    const grid = el('div','select-grid');
+    state.batch.forEach(m => {
+      const selected = state.batchSelected.includes(m.id);
+      const tile = el('div','select-tile' + (selected ? ' selected' : ''));
+      const ratingText = m.vote_average ? m.vote_average.toFixed(1) : null;
+      tile.innerHTML = `
+        <img src="${posterUrl(m.poster_path,'w300')}">
+        ${ratingText ? `<div class="tile-rating">★ ${ratingText}</div>` : ''}
+        <div class="tile-info-btn" data-info>i</div>
+        <div class="tile-label">${titleOf(m)}</div>
+      `;
+      tile.onclick = () => {
+        const i = state.batchSelected.indexOf(m.id);
+        if(i >= 0){ state.batchSelected.splice(i,1); } else { state.batchSelected.push(m.id); }
+        render();
+      };
+      tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
+      grid.appendChild(tile);
+    });
+    wrap.appendChild(grid);
+
+    const btn = el('button','btn', state.batchSelected.length ? `Guardar ${state.batchSelected.length} y ver más` : 'Ver otra tanda');
+    btn.onclick = async () => {
+      btn.textContent = 'Guardando...';
+      await confirmBatch();
+    };
+    wrap.appendChild(btn);
+  }
+
   app.appendChild(wrap);
   appendBottomNav('swipe');
-}
-
-async function doSwipe(outcome){
-  if(!state.current) return;
-  registerDecision(state.current, outcome);
-  state.queue.shift();
-  state.current = state.queue[0] || null;
-  render();
-  await ensureQueue();
-  if(!state.current && state.queue.length){ state.current = state.queue[0]; }
-  if(state.screen === 'swipe') render();
 }
 
 /* ---------- ficha de detalle ---------- */
@@ -1146,13 +1176,7 @@ async function openDetail(movie){
         const rec = recs.find(r => String(r.id) === node.dataset.recId);
         if(!rec) return;
         overlay.remove();
-        if(rec.media_type === state.mediaType){
-          state.current = rec;
-          state.queue.unshift(rec);
-          render();
-        } else {
-          openDetail(rec);
-        }
+        openDetail(rec);
       };
     });
   }catch(e){
@@ -1283,7 +1307,7 @@ function renderMyList(){
       const i = state.platforms.indexOf(key);
       if(i>=0) state.platforms.splice(i,1); else state.platforms.push(key);
       saveSettings();
-      state.queue = []; state.current = null; state.topCache = {};
+      state.batch = []; state.batchSelected = []; state.topCache = {};
       renderMyList();
     };
     grid.appendChild(card);
@@ -1378,7 +1402,7 @@ function appendBottomNav(active){
   items.forEach(it => {
     const btn = el('div', 'nav-item' + (active === it.key ? ' active' : ''), `<div class="ic">${it.icon}</div><div>${it.label}</div>`);
     btn.onclick = async () => {
-      if(it.key === 'swipe' && !state.current){ await goToSwipe(); return; }
+      if(it.key === 'swipe' && !state.batch.length){ await goToSwipe(); return; }
       state.screen = it.key;
       render();
     };
@@ -1633,31 +1657,21 @@ function renderStarDuelScreen(){
 
 async function spinRoulette(){
   try{
-    await ensureQueue();
-    const pool = state.queue.length ? state.queue : (state.gamePool || []);
-    if(!pool.length){ await ensureGamePool(); }
-    const finalPool = pool.length ? pool : state.gamePool;
-    const pick = finalPool[Math.floor(Math.random()*finalPool.length)];
+    if(!state.batch.length){ await ensureBatch(); }
+    let pool = state.batch.length ? state.batch : state.gamePool;
+    if(!pool || !pool.length){ await ensureGamePool(); pool = state.gamePool; }
+    const pick = pool[Math.floor(Math.random()*pool.length)];
     openDetail(pick);
   }catch(e){}
 }
 
 
-/* ---------- teclado: flechas izquierda/derecha para descartar/me gusta ---------- */
-document.addEventListener('keydown', (e) => {
-  if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-  if(state.screen === 'swipe' && state.current){
-    doSwipe(e.key === 'ArrowRight' ? 'like' : 'dislike');
-  }
-});
-
 async function goToSwipe(){
   state.screen = 'swipe';
   state.queueLoading = true;
   render();
-  await ensureQueue();
+  await ensureBatch();
   state.queueLoading = false;
-  state.current = state.queue[0] || null;
   render();
 }
 
