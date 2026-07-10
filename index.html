@@ -1385,6 +1385,20 @@ function renderMyList(){
     });
   }
 
+  const dangerZone = el('div');
+  dangerZone.style.cssText = 'margin-top:30px; padding-top:18px; border-top:1px solid var(--border);';
+  dangerZone.appendChild(el('label','field-label','Zona de reinicio'));
+  const resetBtn = el('button','btn ghost','Restablecer todo (plataformas, gustos, retos)');
+  resetBtn.style.color = 'var(--red)';
+  resetBtn.onclick = () => {
+    if(confirm('Esto borra tus plataformas, tus me gusta/no me gusta, tu lista de "por ver" y tu racha de retos, y vuelve a empezar desde cero. ¿Seguro?')){
+      localStorage.clear();
+      location.reload();
+    }
+  };
+  dangerZone.appendChild(resetBtn);
+  wrap.appendChild(dangerZone);
+
   app.appendChild(wrap);
   appendBottomNav('mylist');
 }
