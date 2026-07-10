@@ -967,6 +967,7 @@ async function loadLandingPosters(){
 }
 
 function renderLanding(){
+  app.innerHTML = '';
   const lp = el('div','lp');
   const wall = el('div','lp-wall'); wall.setAttribute('aria-hidden','true');
   const rowDefs = [
@@ -1062,6 +1063,7 @@ async function ensureQuizMoviePool(){
 }
 
 function renderQuizMovies(){
+  app.innerHTML = '';
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Elige tus gustos</div>`));
   wrap.appendChild(el('p','lead','Toca entre 3 y 5 películas que te gusten (da igual si las has visto o no, esto es para conocer tu estilo). Cuantas más marques, mejor arrancarán tus recomendaciones.'));
@@ -1117,6 +1119,7 @@ async function ensureQuizActorPool(){
 }
 
 function renderQuizActors(){
+  app.innerHTML = '';
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">¿Y qué actores?</div>`));
   wrap.appendChild(el('p','lead','Elige entre 2 y 4 actores o actrices que te gusten. Lo usamos para priorizar películas suyas en tus recomendaciones.'));
@@ -1159,6 +1162,7 @@ function renderQuizActors(){
 }
 
 function renderSwipe(){
+  app.innerHTML = '';
   const wrap = el('div');
 
   const typeTabs = el('div','media-toggle');
@@ -1578,6 +1582,7 @@ function renderGames(){
 }
 
 function renderGamesHub(){
+  app.innerHTML = '';
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Retos</div>`));
   if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
@@ -1619,6 +1624,7 @@ async function startDuel(){
 }
 
 function renderDuelScreen(){
+  app.innerHTML = '';
   const wrap = el('div');
   const header = el('div','marquee');
   header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Duelo de datos</div><div class="icon-btn" id="back-hub">←</div>`;
@@ -1683,6 +1689,7 @@ async function startPosterGame(){
   render();
 }
 function renderPosterScreen(){
+  app.innerHTML = '';
   const wrap = el('div');
   const header = el('div','marquee');
   header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Adivina el póster</div><div class="icon-btn" id="back-hub">←</div>`;
@@ -1738,6 +1745,7 @@ async function startStarDuel(department){
   render();
 }
 function renderStarDuelScreen(){
+  app.innerHTML = '';
   const wrap = el('div');
   const title = state.starDuel && state.starDuel.department === 'directing' ? 'Director vs Director' : 'Actor vs Actor';
   const header = el('div','marquee');
