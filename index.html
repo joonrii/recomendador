@@ -599,7 +599,7 @@ async function fetchDiscoverPage(page, opts={}){
     with_watch_providers: providerIds.join('|'),
     watch_monetization_types: 'flatrate',
     sort_by: opts.sortBy || 'popularity.desc',
-    'vote_count.gte': opts.minVotes || 50,
+    'vote_count.gte': opts.minVotes || 150,
     language: 'es-ES',
     page
   };
@@ -619,10 +619,10 @@ async function fetchDiscoverPage(page, opts={}){
 // mejor valoradas de siempre y una década al azar
 function pickExplorationMode(){
   const roll = Math.random();
-  if(roll < 0.45) return { sortBy: 'popularity.desc' };
-  if(roll < 0.7) return { sortBy: 'vote_average.desc', minVotes: 300 };
+  if(roll < 0.75) return { sortBy: 'popularity.desc' };
+  if(roll < 0.92) return { sortBy: 'vote_average.desc', minVotes: 500 };
   const currentYear = new Date().getFullYear();
-  const decadeStart = Math.floor((1970 + Math.floor(Math.random() * (currentYear - 1980)) ) / 10) * 10;
+  const decadeStart = Math.floor((1990 + Math.floor(Math.random() * (currentYear - 2000)) ) / 10) * 10;
   return { sortBy: 'popularity.desc', decadeStart };
 }
 
@@ -653,7 +653,15 @@ function topDirector(){
 async function pickCandidates(page){
   const roll = Math.random();
   const cfg = mt();
-  if(state.liked.filter(m=>(m.media_type||'movie')===state.mediaType).length >= 3 && roll < 0.20){
+  // tendencia real: lo más visto ahora mismo (fuerte peso, para que reconozcas lo que sale)
+  if(roll < 0.30){
+    try{
+      const data = await tmdb(state.mediaType === 'movie' ? '/trending/movie/week' : '/trending/tv/week', { language:'es-ES', page: Math.max(1, page % 3) });
+      if((data.results||[]).length) return data.results.map(m => ({ ...m, media_type: state.mediaType }));
+    }catch(e){}
+  }
+  // similar a algo que ya te ha gustado
+  if(state.liked.filter(m=>(m.media_type||'movie')===state.mediaType).length >= 3 && roll < 0.48){
     const seedPool = state.liked.filter(m=>(m.media_type||'movie')===state.mediaType).slice(-15);
     const seed = seedPool[Math.floor(Math.random()*seedPool.length)];
     try{
@@ -662,10 +670,11 @@ async function pickCandidates(page){
     }catch(e){}
   }
   const actorId = topActor();
-  if(actorId && roll < 0.42){ return fetchDiscoverPage(page, { cast: actorId }); }
+  if(actorId && roll < 0.58){ return fetchDiscoverPage(page, { cast: actorId }); }
   const directorId = topDirector();
-  if(directorId && state.mediaType === 'movie' && roll < 0.58){ return fetchDiscoverPage(page, { crew: directorId }); }
-  if(state.liked.length >= 4 && roll < 0.78 && topGenre()){ return fetchDiscoverPage(page, { genre: topGenre() }); }
+  if(directorId && state.mediaType === 'movie' && roll < 0.66){ return fetchDiscoverPage(page, { crew: directorId }); }
+  if(state.liked.length >= 4 && roll < 0.80 && topGenre()){ return fetchDiscoverPage(page, { genre: topGenre() }); }
+  // por defecto: popularidad real, muy poco de exploración por décadas (para no llenarte de desconocidas)
   return fetchDiscoverPage(page, pickExplorationMode());
 }
 
@@ -1251,6 +1260,8 @@ function renderSwipe(){
 
     const btn = el('button','btn', state.batchSelected.length ? `Guardar ${state.batchSelected.length} y ver más` : 'Ver otra tanda');
     btn.onclick = async () => {
+      if(btn.disabled) return;
+      btn.disabled = true;
       btn.textContent = 'Guardando...';
       await confirmBatch();
     };
