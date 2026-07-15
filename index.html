@@ -811,18 +811,19 @@ async function fetchProviders(movieId, type){
     return flatrate;
   }catch(e){ return []; }
 }
-function matchOwnedPlatforms(flatrateList){
-  // de la lista real de proveedores, cuáles coinciden con las plataformas que el usuario tiene marcadas
+function matchOwnedPlatforms(flatrateList, platformsOverride){
+  // de la lista real de proveedores, cuáles coinciden con las plataformas dadas (por defecto, las del perfil)
+  const platforms = platformsOverride || state.platforms;
   const owned = [];
   Object.entries(PROVIDER_QUERY).forEach(([key, cfg]) => {
-    if(!state.platforms.includes(key)) return;
+    if(!platforms.includes(key)) return;
     if(flatrateList.some(p => cfg.names.includes(p.provider_name))) owned.push(key);
   });
   return owned;
 }
-function renderProviderChips(container, movieId, type){
+function renderProviderChips(container, movieId, type, platformsOverride){
   fetchProviders(movieId, type).then(list => {
-    const owned = matchOwnedPlatforms(list);
+    const owned = matchOwnedPlatforms(list, platformsOverride);
     container.innerHTML = '';
     if(owned.length){
       owned.forEach(key => {
@@ -830,7 +831,7 @@ function renderProviderChips(container, movieId, type){
         container.insertAdjacentHTML('beforeend', `<span class="provider-chip"><span class="dot" style="background:${cfg.dot}"></span>${cfg.label}</span>`);
       });
     } else if(list.length){
-      // disponible, pero no en ninguna de tus plataformas marcadas — no listamos nombres de canales/paquetes
+      // disponible, pero no en ninguna de las plataformas comprobadas — no listamos nombres de canales/paquetes
       // porque TMDB a veces devuelve variantes confusas (p. ej. "HBO Max Amazon Channel")
       container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">No está en tus plataformas</span>`);
     } else {
@@ -1517,7 +1518,7 @@ function paintTopList(container, list){
     `;
     row.onclick = () => openDetail(m);
     container.appendChild(row);
-    renderProviderChips(row.querySelector('[data-providers]'), m.id, m.media_type || 'movie');
+    renderProviderChips(row.querySelector('[data-providers]'), m.id, m.media_type || 'movie', state.topFilters ? state.topFilters.platforms : null);
   });
 }
 
