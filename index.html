@@ -338,6 +338,18 @@
   .select-counter{ position:sticky; top:0; text-align:center; font-size:13px; color: var(--text-muted); margin-bottom:4px; }
   .select-counter b{ color: var(--gold); }
 
+  .reason-grid{ grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .reason-tile img{ aspect-ratio:2/3; }
+  .reason-tile.liked{ border-color: var(--gold); }
+  .tile-reason{ display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:0.04em; color: var(--gold); font-weight:700; margin-bottom:2px; opacity:0.9; }
+  .reason-tile .tile-label{ font-size:11.5px; padding:8px 8px 7px; line-height:1.3; }
+  .tile-heart{
+    position:absolute; bottom:26px; left:6px; width:26px; height:26px; border-radius:50%;
+    background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:15px;
+    display:flex; align-items:center; justify-content:center; z-index:2; line-height:1;
+  }
+  .reason-tile.liked .tile-heart{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; }
+
   .game-question{
     font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:0.03em; color:#fff;
     background: var(--surface); border:1px solid var(--gold); border-radius:14px; padding:16px 14px;
@@ -653,11 +665,12 @@ function topDirector(){
 async function pickCandidates(page){
   const roll = Math.random();
   const cfg = mt();
+  const tag = (list, reason) => (list||[]).map(m => ({ ...m, media_type: state.mediaType, _reason: reason }));
   // tendencia real: lo más visto ahora mismo (fuerte peso, para que reconozcas lo que sale)
   if(roll < 0.30){
     try{
       const data = await tmdb(state.mediaType === 'movie' ? '/trending/movie/week' : '/trending/tv/week', { language:'es-ES', page: Math.max(1, page % 3) });
-      if((data.results||[]).length) return data.results.map(m => ({ ...m, media_type: state.mediaType }));
+      if((data.results||[]).length) return tag(data.results, 'Tendencia esta semana');
     }catch(e){}
   }
   // similar a algo que ya te ha gustado
@@ -666,16 +679,19 @@ async function pickCandidates(page){
     const seed = seedPool[Math.floor(Math.random()*seedPool.length)];
     try{
       const data = await tmdb(cfg.recommendations(seed.id), { language:'es-ES', page:1 });
-      if((data.results||[]).length) return data.results.map(m => ({ ...m, media_type: state.mediaType }));
+      if((data.results||[]).length) return tag(data.results, `Porque te gustó ${seed.title}`);
     }catch(e){}
   }
   const actorId = topActor();
-  if(actorId && roll < 0.58){ return fetchDiscoverPage(page, { cast: actorId }); }
+  if(actorId && roll < 0.58){ return tag(await fetchDiscoverPage(page, { cast: actorId }), 'Con un actor que te gusta'); }
   const directorId = topDirector();
-  if(directorId && state.mediaType === 'movie' && roll < 0.66){ return fetchDiscoverPage(page, { crew: directorId }); }
-  if(state.liked.length >= 4 && roll < 0.80 && topGenre()){ return fetchDiscoverPage(page, { genre: topGenre() }); }
+  if(directorId && state.mediaType === 'movie' && roll < 0.66){ return tag(await fetchDiscoverPage(page, { crew: directorId }), 'De un director que te gusta'); }
+  if(state.liked.length >= 4 && roll < 0.80 && topGenre()){
+    const gName = genreMapFor(state.mediaType)[topGenre()];
+    return tag(await fetchDiscoverPage(page, { genre: topGenre() }), gName ? `Popular en ${gName}` : 'Según tus géneros favoritos');
+  }
   // por defecto: popularidad real, muy poco de exploración por décadas (para no llenarte de desconocidas)
-  return fetchDiscoverPage(page, pickExplorationMode());
+  return tag(await fetchDiscoverPage(page, pickExplorationMode()), 'Popular ahora');
 }
 
 async function ensureBatch(size){
@@ -1233,37 +1249,44 @@ function renderSwipe(){
     empty.appendChild(dbgBtn);
   } else {
     setBackdrop(null);
-    wrap.appendChild(el('p','lead','Toca las que te llamen la atención (da igual si las has visto o no). Para info, tráiler o reparto, toca la "i".'));
-    const counter = el('div','select-counter', `<b>${state.batchSelected.length}</b> seleccionadas de ${state.batch.length}`);
-    wrap.appendChild(counter);
+    wrap.appendChild(el('p','lead','Cada ficha te dice por qué te la recomendamos. Toca el corazón para guardarla — al momento, sin pasos de más. Toca la "i" para sinopsis, tráiler y reparto.'));
 
-    const grid = el('div','select-grid');
+    const grid = el('div','select-grid reason-grid');
     state.batch.forEach(m => {
-      const selected = state.batchSelected.includes(m.id);
-      const tile = el('div','select-tile' + (selected ? ' selected' : ''));
+      const liked = state.liked.some(x => x.id === m.id);
+      const tile = el('div','select-tile reason-tile' + (liked ? ' liked' : ''));
       const ratingText = m.vote_average ? m.vote_average.toFixed(1) : null;
       tile.innerHTML = `
         <img src="${posterUrl(m.poster_path,'w300')}">
         ${ratingText ? `<div class="tile-rating">★ ${ratingText}</div>` : ''}
         <div class="tile-info-btn" data-info>i</div>
-        <div class="tile-label">${titleOf(m)}</div>
+        <div class="tile-heart" data-heart>${liked ? '♥' : '♡'}</div>
+        <div class="tile-label">${m._reason ? `<span class="tile-reason">${m._reason}</span>` : ''}${titleOf(m)}</div>
       `;
-      tile.onclick = () => {
-        const i = state.batchSelected.indexOf(m.id);
-        if(i >= 0){ state.batchSelected.splice(i,1); } else { state.batchSelected.push(m.id); }
+      tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
+      tile.querySelector('[data-heart]').onclick = (e) => {
+        e.stopPropagation();
+        if(state.liked.some(x => x.id === m.id)){
+          state.liked = state.liked.filter(x => x.id !== m.id);
+          recomputeGenreScores(); saveTaste();
+        } else {
+          registerDecision(m, 'like');
+        }
         render();
       };
-      tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
       grid.appendChild(tile);
     });
     wrap.appendChild(grid);
 
-    const btn = el('button','btn', state.batchSelected.length ? `Guardar ${state.batchSelected.length} y ver más` : 'Ver otra tanda');
+    const btn = el('button','btn','Ver más recomendadas');
     btn.onclick = async () => {
       if(btn.disabled) return;
       btn.disabled = true;
-      btn.textContent = 'Guardando...';
-      await confirmBatch();
+      btn.textContent = 'Buscando...';
+      const seenSet = state.batchSeen[state.mediaType];
+      state.batch.forEach(m => seenSet.add(m.id));
+      state.batch = [];
+      await goToSwipe();
     };
     wrap.appendChild(btn);
   }
@@ -1296,6 +1319,9 @@ async function openDetail(movie){
       ? (data.runtime ? data.runtime+' min' : '')
       : (data.number_of_seasons ? `${data.number_of_seasons} temporada${data.number_of_seasons>1?'s':''}` : '');
 
+    const liked = state.liked.some(x => x.id === movie.id);
+    const disliked = state.disliked.some(x => x.id === movie.id);
+    const inWatchlist = state.watchlist.some(x => x.id === movie.id);
     sheet.innerHTML = `
       <div class="sheet-close"></div>
       <div class="display" style="font-size:22px;">${title} ${type==='tv' ? '<span style=\"font-size:12px; color:var(--text-muted); font-family:\'Space Grotesk\',sans-serif;\">SERIE</span>' : ''}</div>
@@ -1305,6 +1331,11 @@ async function openDetail(movie){
         <div class="stat"><div class="label">TMDB</div><div class="value">★ ${data.vote_average ? data.vote_average.toFixed(1) : '—'}</div></div>
         <div class="stat"><div class="label">Votos</div><div class="value">${data.vote_count || 0}</div></div>
       </div>
+      <div style="display:flex; gap:10px; margin:2px 0 14px;">
+        <div class="round-btn nope" data-act="dislike" title="No me gusta" style="width:44px;height:44px;font-size:18px;${disliked?'opacity:0.4;':''}">✕</div>
+        <div class="round-btn watchlist" data-act="watchlist" title="Quiero verla" style="width:44px;height:44px;font-size:16px;${inWatchlist?'background:var(--gold-dim);color:var(--gold);':''}">🕐</div>
+        <div class="round-btn like" data-act="like" title="Me gusta" style="width:44px;height:44px;font-size:18px;${liked?'':'opacity:0.6;'}">♥</div>
+      </div>
       ${trailer ? `<a class="trailer-link" href="https://www.youtube.com/watch?v=${trailer.key}" target="_blank" rel="noopener noreferrer">▶ Ver tráiler</a>` : ''}
       <p class="overview" style="-webkit-line-clamp: unset;">${data.overview || 'Sin sinopsis disponible.'}</p>
       ${cast.length ? `<div class="field-label">Reparto</div><div class="cast-row">${cast.map(n=>`<span class="genre-pill">${n}</span>`).join('')}</div>` : ''}
@@ -1312,6 +1343,24 @@ async function openDetail(movie){
     `;
     renderProviderChips(sheet.querySelector('[data-detail-providers]'), movie.id, type);
 
+    sheet.querySelectorAll('[data-act]').forEach(btn => {
+      btn.onclick = () => {
+        const act = btn.dataset.act;
+        const full = { ...movie, ...data, media_type: type };
+        if(act === 'like'){
+          if(state.liked.some(x=>x.id===movie.id)){ state.liked = state.liked.filter(x=>x.id!==movie.id); recomputeGenreScores(); saveTaste(); }
+          else { registerDecision(full, 'like'); }
+        } else if(act === 'dislike'){
+          if(state.disliked.some(x=>x.id===movie.id)){ state.disliked = state.disliked.filter(x=>x.id!==movie.id); saveTaste(); }
+          else { registerDecision(full, 'dislike'); }
+        } else if(act === 'watchlist'){
+          if(state.watchlist.some(x=>x.id===movie.id)){ state.watchlist = state.watchlist.filter(x=>x.id!==movie.id); saveTaste(); }
+          else { registerDecision(full, 'watchlist'); }
+        }
+        overlay.remove();
+        openDetail(movie);
+      };
+    });
 
     sheet.querySelectorAll('[data-rec-id]').forEach(node => {
       node.onclick = () => {
