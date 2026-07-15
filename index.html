@@ -1762,7 +1762,7 @@ function renderGamesHub(){
 
   const games = [
     { icon:'📊', title:'Duelo de datos', action: () => startDuel() },
-    { icon:'🖼️', title:'Adivina el póster', action: () => startPosterGame() },
+    { icon:'🖼️', title:'Adivina por el recorte', action: () => startPosterGame() },
     { icon:'🎭', title:'Actor vs Actor', action: () => startStarDuel('acting') },
     { icon:'🎬', title:'Director vs Director', action: () => startStarDuel('directing') },
     { icon:'🎲', title:'Ruleta sorpresa', action: () => spinRoulette() },
@@ -1864,7 +1864,7 @@ function renderPosterScreen(){
   app.innerHTML = '';
   const wrap = el('div');
   const header = el('div','marquee');
-  header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Adivina el póster</div><div class="icon-btn" id="back-hub">←</div>`;
+  header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Adivina por el recorte</div><div class="icon-btn" id="back-hub">←</div>`;
   wrap.appendChild(header);
 
   const g = state.posterGame || {};
