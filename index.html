@@ -349,6 +349,11 @@
     display:flex; align-items:center; justify-content:center; z-index:2; line-height:1;
   }
   .reason-tile.liked .tile-heart{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; }
+  .tile-nope{
+    position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
+    background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:var(--red); font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; z-index:2;
+  }
 
   .game-question{
     font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:0.03em; color:#fff;
@@ -1259,6 +1264,7 @@ function renderSwipe(){
       tile.innerHTML = `
         <img src="${posterUrl(m.poster_path,'w300')}">
         ${ratingText ? `<div class="tile-rating">★ ${ratingText}</div>` : ''}
+        <div class="tile-nope" data-nope title="No me gusta">✕</div>
         <div class="tile-info-btn" data-info>i</div>
         <div class="tile-heart" data-heart>${liked ? '♥' : '♡'}</div>
         <div class="tile-label">${m._reason ? `<span class="tile-reason">${m._reason}</span>` : ''}${titleOf(m)}</div>
@@ -1272,6 +1278,13 @@ function renderSwipe(){
         } else {
           registerDecision(m, 'like');
         }
+        render();
+      };
+      tile.querySelector('[data-nope]').onclick = (e) => {
+        e.stopPropagation();
+        registerDecision(m, 'dislike');
+        state.batch = state.batch.filter(x => x.id !== m.id);
+        state.batchSeen[state.mediaType].add(m.id);
         render();
       };
       grid.appendChild(tile);
