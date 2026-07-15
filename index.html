@@ -830,9 +830,9 @@ function renderProviderChips(container, movieId, type){
         container.insertAdjacentHTML('beforeend', `<span class="provider-chip"><span class="dot" style="background:${cfg.dot}"></span>${cfg.label}</span>`);
       });
     } else if(list.length){
-      // disponible, pero no en ninguna de tus plataformas marcadas
-      const names = list.slice(0,2).map(p=>p.provider_name).join(', ');
-      container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">No está en las tuyas (${names})</span>`);
+      // disponible, pero no en ninguna de tus plataformas marcadas — no listamos nombres de canales/paquetes
+      // porque TMDB a veces devuelve variantes confusas (p. ej. "HBO Max Amazon Channel")
+      container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">No está en tus plataformas</span>`);
     } else {
       container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">Sin streaming ahora</span>`);
     }
