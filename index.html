@@ -282,6 +282,39 @@
   ::-webkit-scrollbar{ width:0; height:0; }
 
   /* retos / juegos */
+  .featured-game{
+    position:relative; cursor:pointer; border-radius:20px; padding:22px 20px; margin: 6px 0 16px; overflow:hidden;
+    background:
+      radial-gradient(circle at 15% 20%, #7C3AED55, transparent 50%),
+      radial-gradient(circle at 90% 90%, #EC489955, transparent 50%),
+      var(--surface-2);
+    border: 1px solid rgba(255,255,255,0.14);
+  }
+  .featured-game:active{ transform: scale(0.98); }
+  .featured-badge{ display:inline-block; background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:20px; margin-bottom:12px; letter-spacing:0.02em; }
+  .featured-icon{ font-size:34px; margin-bottom:6px; }
+  .featured-title{ font-size:24px; margin-bottom:6px; }
+  .featured-sub{ font-size:13px; color: var(--text-muted); line-height:1.5; max-width:320px; }
+
+  .framed-dots{ display:flex; gap:6px; margin-bottom:12px; }
+  .framed-dots span{ flex:1; height:5px; border-radius:4px; background: var(--surface-2); }
+  .framed-dots span.active{ background: var(--gold); }
+  .framed-dots span.hit{ background: var(--teal); }
+  .framed-dots span.miss{ background: var(--red); }
+  .framed-frame{ width:100%; aspect-ratio:16/9; border-radius:16px; overflow:hidden; background:var(--surface-2); border:1px solid var(--border); margin-bottom:12px; }
+  .framed-frame img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .framed-history{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+  .framed-guess-item{ font-size:12.5px; padding:8px 12px; border-radius:10px; background:var(--surface-2); }
+  .framed-guess-item.hit{ color: var(--teal); }
+  .framed-guess-item.miss{ color: var(--text-muted); }
+  .framed-search{ margin-bottom:8px; }
+  .framed-search input{ width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:12px 14px; border-radius:10px; font-size:14px; font-family:inherit; outline:none; }
+  .framed-search input:focus{ border-color: var(--gold); }
+  .framed-suggestions{ display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+  .framed-suggestion-item{ font-size:13.5px; padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--border); cursor:pointer; }
+  .framed-suggestion-item span{ color:var(--text-muted); font-size:12px; }
+  .framed-suggestion-item:active{ background: var(--gold-dim); }
+
   .game-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .game-card{ background: var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 12px; text-align:center; cursor:pointer; }
   .game-card .gi{ font-size:26px; margin-bottom:8px; }
@@ -1668,6 +1701,7 @@ function renderGames(){
   if(state.gameScreen === 'duel') return renderDuelScreen();
   if(state.gameScreen === 'poster') return renderPosterScreen();
   if(state.gameScreen === 'stars') return renderStarDuelScreen();
+  if(state.gameScreen === 'framed') return renderFramedScreen();
   return renderGamesHub();
 }
 
@@ -1677,6 +1711,16 @@ function renderGamesHub(){
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Retos</div>`));
   if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
   wrap.appendChild(el('p','lead','Pon a prueba lo que sabes de cine, con datos reales de TMDB.'));
+
+  const featured = el('div','featured-game');
+  featured.innerHTML = `
+    <div class="featured-badge">NUEVO · inspirado en framed.wtf</div>
+    <div class="featured-icon">🎞️</div>
+    <div class="featured-title display">Adivina por fotogramas</div>
+    <p class="featured-sub">6 intentos. Cada fallo revela un fotograma nuevo de la película. Busca y adivina.</p>
+  `;
+  featured.onclick = () => startFramedGame();
+  wrap.appendChild(featured);
 
   const games = [
     { icon:'📊', title:'Duelo de datos', action: () => startDuel() },
@@ -1887,6 +1931,123 @@ async function spinRoulette(){
   }catch(e){}
 }
 
+/* ---------- Adivina por fotogramas (inspirado en framed.wtf, con datos de TMDB) ---------- */
+async function startFramedGame(){
+  state.gameScreen = 'framed';
+  state.framedGame = { loading:true };
+  render();
+  try{
+    await ensureGamePool();
+    // buscamos una peli con suficientes fotogramas reales disponibles
+    let movie = null, frames = [];
+    let tries = 0;
+    while(tries < 8 && frames.length < 4){
+      tries++;
+      movie = state.gamePool[Math.floor(Math.random()*state.gamePool.length)];
+      const data = await tmdb(`/movie/${movie.id}/images`, { include_image_language: 'en,null' });
+      frames = (data.backdrops || []).filter(b => b.aspect_ratio > 1.5).slice(0, 6);
+    }
+    if(frames.length < 2){ state.framedGame = { error:true }; render(); return; }
+    state.framedGame = {
+      movie, frames, revealed: 1, guesses: [], status: 'playing', query: '', results: []
+    };
+  }catch(e){ state.framedGame = { error:true }; }
+  render();
+}
+
+async function framedSearch(query){
+  const fg = state.framedGame;
+  fg.query = query;
+  if(query.trim().length < 2){ fg.results = []; render(); return; }
+  try{
+    const data = await tmdb('/search/movie', { query, language:'es-ES' });
+    fg.results = (data.results||[]).slice(0,5);
+  }catch(e){ fg.results = []; }
+  render();
+}
+
+function framedGuess(guessMovie){
+  const fg = state.framedGame;
+  if(fg.status !== 'playing') return;
+  const correct = guessMovie.id === fg.movie.id;
+  fg.guesses.push({ title: guessMovie.title, correct });
+  fg.query = ''; fg.results = [];
+  if(correct){
+    fg.status = 'won';
+    state.streak += 1; saveStreak();
+  } else if(fg.guesses.length >= 6 || fg.revealed >= fg.frames.length){
+    fg.status = 'lost';
+    state.streak = 0; saveStreak();
+  } else {
+    fg.revealed += 1;
+  }
+  render();
+}
+
+function renderFramedScreen(){
+  app.innerHTML = '';
+  const wrap = el('div');
+  const header = el('div','marquee');
+  header.innerHTML = `<div class="display marquee-title" style="font-size:24px;">Adivina por fotogramas</div><div class="icon-btn" id="back-hub">←</div>`;
+  wrap.appendChild(header);
+
+  const fg = state.framedGame || {};
+  if(fg.loading){ wrap.appendChild(el('p','lead','Eligiendo una película con buenos fotogramas...')); }
+  else if(fg.error){ wrap.appendChild(el('p','lead','No se ha podido cargar, prueba de nuevo.')); }
+  else if(fg.movie){
+    if(state.streak > 0){ wrap.appendChild(el('div','streak-badge', `🔥 Racha: ${state.streak}`)); }
+
+    const dots = el('div','framed-dots');
+    for(let i=0;i<6;i++){
+      const d = el('span', i < fg.guesses.length ? (fg.guesses[i].correct ? 'hit' : 'miss') : (i < fg.revealed ? 'active' : ''));
+      dots.appendChild(d);
+    }
+    wrap.appendChild(dots);
+
+    const frame = fg.frames[fg.revealed - 1];
+    const frameWrap = el('div','framed-frame');
+    frameWrap.innerHTML = `<img src="${posterUrl(frame.file_path, 'w780')}">`;
+    wrap.appendChild(frameWrap);
+
+    if(fg.guesses.length){
+      const hist = el('div','framed-history');
+      fg.guesses.forEach(g => { hist.appendChild(el('div','framed-guess-item ' + (g.correct?'hit':'miss'), `${g.correct?'✓':'✕'} ${g.title}`)); });
+      wrap.appendChild(hist);
+    }
+
+    if(fg.status === 'playing'){
+      const searchWrap = el('div','framed-search');
+      const input = el('input');
+      input.type = 'text'; input.placeholder = 'Escribe el título de la película...'; input.value = fg.query;
+      input.autocomplete = 'off';
+      let debounce;
+      input.oninput = (e) => { clearTimeout(debounce); const v = e.target.value; debounce = setTimeout(() => framedSearch(v), 300); };
+      searchWrap.appendChild(input);
+      wrap.appendChild(searchWrap);
+
+      if(fg.results && fg.results.length){
+        const list = el('div','framed-suggestions');
+        fg.results.forEach(r => {
+          const item = el('div','framed-suggestion-item', `${r.title} ${r.release_date ? `<span>(${r.release_date.slice(0,4)})</span>` : ''}`);
+          item.onclick = () => framedGuess(r);
+          list.appendChild(item);
+        });
+        wrap.appendChild(list);
+      }
+      wrap.appendChild(el('p','lead', `Intento ${fg.guesses.length + 1} de 6`));
+    } else {
+      const banner = el('div','result-banner ' + (fg.status === 'won' ? 'win' : 'lose'), fg.status === 'won' ? `¡ACIERTO EN ${fg.guesses.length}! 🎉` : 'FALLASTE');
+      wrap.appendChild(banner);
+      wrap.appendChild(el('p','lead', `La película era: <b style="color:var(--text)">${fg.movie.title}</b>`));
+      const btn = el('button','btn','Jugar otra vez');
+      btn.onclick = () => startFramedGame();
+      wrap.appendChild(btn);
+    }
+  }
+  app.appendChild(wrap);
+  appendBottomNav('games');
+  header.querySelector('#back-hub').onclick = () => { state.gameScreen = 'hub'; render(); };
+}
 
 async function goToSwipe(){
   state.screen = 'swipe';
