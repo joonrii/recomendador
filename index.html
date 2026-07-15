@@ -307,9 +307,11 @@
   .framed-guess-item{ font-size:12.5px; padding:8px 12px; border-radius:10px; background:var(--surface-2); }
   .framed-guess-item.hit{ color: var(--teal); }
   .framed-guess-item.miss{ color: var(--text-muted); }
-  .framed-search{ margin-bottom:8px; }
-  .framed-search input{ width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:12px 14px; border-radius:10px; font-size:14px; font-family:inherit; outline:none; }
-  .framed-search input:focus{ border-color: var(--gold); }
+  .framed-search-row{ display:flex; gap:8px; margin-bottom:8px; }
+  .framed-search-row input{ flex:1; min-width:0; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:12px 14px; border-radius:10px; font-size:14px; font-family:inherit; outline:none; }
+  .framed-search-row input:focus{ border-color: var(--gold); }
+  .framed-skip-btn{ flex-shrink:0; background:var(--surface-2); border:1px solid var(--border); color:var(--text-muted); padding:0 16px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .framed-skip-btn:active{ background: var(--red-dim); color: var(--red); }
   .framed-suggestions{ display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
   .framed-suggestion-item{ font-size:13.5px; padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--border); cursor:pointer; }
   .framed-suggestion-item span{ color:var(--text-muted); font-size:12px; }
@@ -1984,6 +1986,20 @@ function framedGuess(guessMovie){
   render();
 }
 
+function framedSkip(){
+  const fg = state.framedGame;
+  if(fg.status !== 'playing') return;
+  fg.guesses.push({ title: 'Pasaste', correct: false, skipped: true });
+  fg.query = ''; fg.results = [];
+  if(fg.guesses.length >= 6 || fg.revealed >= fg.frames.length){
+    fg.status = 'lost';
+    state.streak = 0; saveStreak();
+  } else {
+    fg.revealed += 1;
+  }
+  render();
+}
+
 function renderFramedScreen(){
   app.innerHTML = '';
   const wrap = el('div');
@@ -2016,13 +2032,17 @@ function renderFramedScreen(){
     }
 
     if(fg.status === 'playing'){
-      const searchWrap = el('div','framed-search');
+      const searchWrap = el('div','framed-search-row');
       const input = el('input');
       input.type = 'text'; input.placeholder = 'Escribe el título de la película...'; input.value = fg.query;
       input.autocomplete = 'off';
       let debounce;
       input.oninput = (e) => { clearTimeout(debounce); const v = e.target.value; debounce = setTimeout(() => framedSearch(v), 300); };
       searchWrap.appendChild(input);
+      const skipBtn = el('button','framed-skip-btn','Paso →');
+      skipBtn.type = 'button';
+      skipBtn.onclick = () => framedSkip();
+      searchWrap.appendChild(skipBtn);
       wrap.appendChild(searchWrap);
 
       if(fg.results && fg.results.length){
