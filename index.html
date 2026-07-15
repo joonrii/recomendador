@@ -369,6 +369,7 @@
     position:absolute; bottom:26px; right:6px; width:22px; height:22px; border-radius:50%;
     background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700;
     display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; z-index:2;
+    transition: transform .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
   }
   .select-counter{ position:sticky; top:0; text-align:center; font-size:13px; color: var(--text-muted); margin-bottom:4px; }
   .select-counter b{ color: var(--gold); }
@@ -382,12 +383,25 @@
     position:absolute; bottom:26px; left:6px; width:26px; height:26px; border-radius:50%;
     background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:15px;
     display:flex; align-items:center; justify-content:center; z-index:2; line-height:1;
+    transition: transform .12s ease, background .12s ease, color .12s ease, border-color .12s ease;
   }
+  .tile-heart:hover{ background: var(--teal-dim); border-color: var(--teal); color: var(--teal); transform: scale(1.12); }
   .reason-tile.liked .tile-heart{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; }
+  .reason-tile.liked .tile-heart:hover{ transform: scale(1.12); filter: brightness(1.1); }
   .tile-nope{
     position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
     background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:var(--red); font-size:12px; font-weight:700;
     display:flex; align-items:center; justify-content:center; z-index:2;
+    transition: transform .12s ease, background .12s ease, border-color .12s ease;
+  }
+  .tile-nope:hover{ background: var(--red-dim); border-color: var(--red); transform: scale(1.12); }
+  .tile-info-btn:hover{ background: var(--gold-dim); border-color: var(--gold); color: var(--gold); transform: scale(1.12); }
+  .tile-platform{
+    position:absolute; top:28px; left:6px; z-index:2; display:flex; gap:3px;
+  }
+  .tile-platform .dot{
+    width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background: rgba(20,20,26,0.85); border:1px solid rgba(255,255,255,0.25); font-size:8px; font-weight:800; color:#fff;
   }
 
   .game-question{
@@ -837,6 +851,17 @@ function renderProviderChips(container, movieId, type, platformsOverride){
     } else {
       container.insertAdjacentHTML('beforeend', `<span class="provider-chip unavailable">Sin streaming ahora</span>`);
     }
+  });
+}
+
+function renderPlatformDots(container, movieId, type){
+  fetchProviders(movieId, type).then(list => {
+    const owned = matchOwnedPlatforms(list);
+    if(!owned.length) return;
+    container.innerHTML = owned.map(key => {
+      const cfg = PROVIDER_QUERY[key];
+      return `<span class="dot" style="background:${cfg.dot}" title="${cfg.label}">${cfg.label[0]}</span>`;
+    }).join('');
   });
 }
 
@@ -1300,11 +1325,13 @@ function renderSwipe(){
       tile.innerHTML = `
         <img src="${posterUrl(m.poster_path,'w300')}">
         ${ratingText ? `<div class="tile-rating">★ ${ratingText}</div>` : ''}
+        <div class="tile-platform" data-platform></div>
         <div class="tile-nope" data-nope title="No me gusta">✕</div>
         <div class="tile-info-btn" data-info>i</div>
         <div class="tile-heart" data-heart>${liked ? '♥' : '♡'}</div>
         <div class="tile-label">${m._reason ? `<span class="tile-reason">${m._reason}</span>` : ''}${titleOf(m)}</div>
       `;
+      renderPlatformDots(tile.querySelector('[data-platform]'), m.id, m.media_type);
       tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
       tile.querySelector('[data-heart]').onclick = (e) => {
         e.stopPropagation();
