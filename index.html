@@ -1697,6 +1697,16 @@ function renderMyList(){
     });
   }
 
+  const credits = el('div');
+  credits.style.cssText = 'margin-top:30px; padding-top:18px; border-top:1px solid var(--border); text-align:center;';
+  credits.innerHTML = `
+    <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; color:#01B4E4; margin-bottom:6px;">TMDB</div>
+    <p style="font-size:10.5px; color:var(--text-muted); line-height:1.5; max-width:320px; margin:0 auto;">
+      Esta app usa la API de TMDB pero no está aprobada ni certificada por TMDB.
+      Datos y pósters de <a href="https://www.themoviedb.org/" target="_blank" rel="noopener" style="color:var(--text-muted); text-decoration:underline;">themoviedb.org</a>.
+    </p>
+  `;
+
   const dangerZone = el('div');
   dangerZone.style.cssText = 'margin-top:30px; padding-top:18px; border-top:1px solid var(--border);';
   dangerZone.appendChild(el('label','field-label','Zona de reinicio'));
@@ -1709,6 +1719,7 @@ function renderMyList(){
     }
   };
   dangerZone.appendChild(resetBtn);
+  wrap.appendChild(credits);
   wrap.appendChild(dangerZone);
 
   app.appendChild(wrap);
