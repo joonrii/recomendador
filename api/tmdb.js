@@ -21,12 +21,20 @@ module.exports = async (req, res) => {
   });
 
   try {
-    const tmdbRes = await fetch(url.toString());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let tmdbRes;
+    try {
+      tmdbRes = await fetch(url.toString(), { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     const data = await tmdbRes.json();
     // pequeña cache en el borde de Vercel para aliviar peticiones repetidas
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
     return res.status(tmdbRes.status).json(data);
   } catch (e) {
-    return res.status(502).json({ error: 'No se ha podido contactar con TMDB.' });
+    const timedOut = e.name === 'AbortError';
+    return res.status(timedOut ? 504 : 502).json({ error: timedOut ? 'TMDB tardó demasiado en responder.' : 'No se ha podido contactar con TMDB.' });
   }
 };
