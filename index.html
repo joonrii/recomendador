@@ -668,10 +668,8 @@ async function tmdb(path, params={}, _retry){
 
 async function verifyKeyAndLoadMeta(){
   const movieGenres = await tmdb('/genre/movie/list', { language: 'es-ES' });
-  const tvGenres = await tmdb('/genre/tv/list', { language: 'es-ES' });
   const provList = await tmdb('/watch/providers/movie', { watch_region: state.region });
   state.genreMaps.movie = {}; movieGenres.genres.forEach(g => state.genreMaps.movie[g.id] = g.name);
-  state.genreMaps.tv = {}; tvGenres.genres.forEach(g => state.genreMaps.tv[g.id] = g.name);
 
   const ids = {};
   Object.entries(PROVIDER_QUERY).forEach(([key, cfg]) => {
@@ -679,6 +677,18 @@ async function verifyKeyAndLoadMeta(){
     if(match) ids[key] = match.provider_id;
   });
   state.providerIds = ids;
+}
+
+let tvGenresLoading = null;
+async function ensureTvGenres(){
+  if(Object.keys(state.genreMaps.tv).length) return;
+  if(!tvGenresLoading){
+    tvGenresLoading = tmdb('/genre/tv/list', { language: 'es-ES' })
+      .then(data => { state.genreMaps.tv = {}; data.genres.forEach(g => state.genreMaps.tv[g.id] = g.name); })
+      .catch(() => {}) // si falla, seguimos sin nombres de género de serie, no es crítico
+      .finally(() => { tvGenresLoading = null; });
+  }
+  await tvGenresLoading;
 }
 
 function selectedProviderIds(){ return state.platforms.map(p => state.providerIds[p]).filter(Boolean); }
@@ -1313,6 +1323,7 @@ function renderSwipe(){
     seg.onclick = async () => {
       if(state.mediaType === key) return;
       switchMediaType(key);
+      if(key === 'tv') ensureTvGenres();
       if(!state.batch.length){ await goToSwipe(); }
       else { render(); }
     };
