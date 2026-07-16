@@ -2134,12 +2134,19 @@ async function goToSwipe(){
 }
 
 /* ---------- arranque ---------- */
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => { const e = new Error('timeout'); e.kind = 'network'; reject(e); }, ms))
+  ]);
+}
+
 async function init(){
   loadStorage();
   state.screen = 'loading'; render();
-  try{ await verifyKeyAndLoadMeta(); }
+  try{ await withTimeout(verifyKeyAndLoadMeta(), 15000); }
   catch(e){
-    state.error = e.kind === 'network' ? 'No se ha podido conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.' : 'Ha ocurrido un problema al cargar los datos. Inténtalo de nuevo en unos segundos.';
+    state.error = e.kind === 'network' ? 'No se ha podido conectar con el servidor (o ha tardado demasiado). Comprueba tu conexión e inténtalo de nuevo.' : 'Ha ocurrido un problema al cargar los datos. Inténtalo de nuevo en unos segundos.';
     state.screen = 'startup-error'; render(); return;
   }
   if(!state.platforms.length){
