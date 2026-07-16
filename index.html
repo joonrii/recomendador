@@ -645,7 +645,7 @@ function switchMediaType(newType){
 }
 
 /* ---------- TMDB (a través de nuestro proxy de Vercel, sin clave en el navegador) ---------- */
-async function tmdb(path, params={}){
+async function tmdb(path, params={}, _retry){
   const url = new URL(window.location.origin + '/api/tmdb');
   url.searchParams.set('path', path);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
@@ -653,9 +653,16 @@ async function tmdb(path, params={}){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
   try{ res = await fetch(url.toString(), { signal: controller.signal }); }
-  catch(networkErr){ const e = new Error('NETWORK_OR_CORS'); e.kind = 'network'; throw e; }
+  catch(networkErr){
+    clearTimeout(timer);
+    if(!_retry){ return tmdb(path, params, true); } // un reintento automático antes de rendirse
+    const e = new Error('NETWORK_OR_CORS'); e.kind = 'network'; throw e;
+  }
   finally{ clearTimeout(timer); }
-  if(!res.ok){ const e = new Error('TMDB_ERROR_' + res.status); e.kind = 'http_' + res.status; throw e; }
+  if(!res.ok){
+    if(res.status >= 500 && !_retry){ return tmdb(path, params, true); } // reintento si el servidor falló
+    const e = new Error('TMDB_ERROR_' + res.status); e.kind = 'http_' + res.status; throw e;
+  }
   return res.json();
 }
 
