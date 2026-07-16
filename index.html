@@ -650,18 +650,19 @@ async function tmdb(path, params={}){
   url.searchParams.set('path', path);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
   let res;
-  try{ res = await fetch(url.toString()); }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try{ res = await fetch(url.toString(), { signal: controller.signal }); }
   catch(networkErr){ const e = new Error('NETWORK_OR_CORS'); e.kind = 'network'; throw e; }
+  finally{ clearTimeout(timer); }
   if(!res.ok){ const e = new Error('TMDB_ERROR_' + res.status); e.kind = 'http_' + res.status; throw e; }
   return res.json();
 }
 
 async function verifyKeyAndLoadMeta(){
-  const [movieGenres, tvGenres, provList] = await Promise.all([
-    tmdb('/genre/movie/list', { language: 'es-ES' }),
-    tmdb('/genre/tv/list', { language: 'es-ES' }),
-    tmdb('/watch/providers/movie', { watch_region: state.region })
-  ]);
+  const movieGenres = await tmdb('/genre/movie/list', { language: 'es-ES' });
+  const tvGenres = await tmdb('/genre/tv/list', { language: 'es-ES' });
+  const provList = await tmdb('/watch/providers/movie', { watch_region: state.region });
   state.genreMaps.movie = {}; movieGenres.genres.forEach(g => state.genreMaps.movie[g.id] = g.name);
   state.genreMaps.tv = {}; tvGenres.genres.forEach(g => state.genreMaps.tv[g.id] = g.name);
 
@@ -2144,7 +2145,7 @@ function withTimeout(promise, ms){
 async function init(){
   loadStorage();
   state.screen = 'loading'; render();
-  try{ await withTimeout(verifyKeyAndLoadMeta(), 15000); }
+  try{ await withTimeout(verifyKeyAndLoadMeta(), 40000); }
   catch(e){
     state.error = e.kind === 'network' ? 'No se ha podido conectar con el servidor (o ha tardado demasiado). Comprueba tu conexión e inténtalo de nuevo.' : 'Ha ocurrido un problema al cargar los datos. Inténtalo de nuevo en unos segundos.';
     state.screen = 'startup-error'; render(); return;
