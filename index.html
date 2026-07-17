@@ -371,44 +371,49 @@
   .select-tile .tile-label{ position:absolute; bottom:0; left:0; right:0; padding:6px 6px 5px; font-size:10.5px; line-height:1.2;
     background:linear-gradient(transparent, rgba(0,0,0,0.85)); color:#fff; }
   .select-tile.actor img{ aspect-ratio:1/1; object-fit:cover; }
-  .tile-rating{ position:absolute; top:6px; left:6px; background:rgba(20,20,26,0.8); color:var(--gold); font-size:10px; font-weight:700; padding:3px 7px; border-radius:20px; }
+  .tile-rating{ position:absolute; top:8px; left:8px; background:rgba(0,0,0,0.8); color:#FBBF24; font-size:11px; font-weight:700; padding:4px 8px; border-radius:20px; z-index:2; }
   .tile-info-btn{
-    position:absolute; bottom:26px; right:6px; width:22px; height:22px; border-radius:50%;
-    background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700;
-    display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; z-index:2;
+    width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background: var(--surface-2); border:1px solid var(--border); color: var(--text-muted); font-size:11px; font-weight:700;
+    font-family:'Space Grotesk',sans-serif; flex-shrink:0;
     transition: transform .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
   }
   .select-counter{ position:sticky; top:0; text-align:center; font-size:13px; color: var(--text-muted); margin-bottom:4px; }
   .select-counter b{ color: var(--gold); }
 
-  .reason-grid{ grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .reason-tile img{ aspect-ratio:2/3; }
+  .reason-grid{ grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .reason-tile{ display:flex; flex-direction:column; }
   .reason-tile.liked{ border-color: var(--gold); }
-  .tile-reason{ display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:0.04em; color: var(--gold); font-weight:700; margin-bottom:2px; opacity:0.9; }
-  .reason-tile .tile-label{ font-size:11.5px; padding:8px 8px 7px; line-height:1.3; }
+  .tile-poster-wrap{ position:relative; }
+  .tile-poster-wrap img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; opacity:1; }
+  .tile-footer{ background: var(--surface); padding:7px 6px 8px; }
+  .tile-reason{ display:block; font-size:8px; text-transform:uppercase; letter-spacing:0.02em; color: var(--gold); font-weight:700; margin-bottom:4px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tile-title-row{ display:flex; align-items:flex-end; justify-content:space-between; gap:4px; }
+  .tile-title{ font-size:10.5px; font-weight:600; line-height:1.25; color: var(--text); flex:1; min-width:0;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .tile-actions{ display:flex; gap:4px; flex-shrink:0; }
   .tile-heart{
-    position:absolute; bottom:26px; left:6px; width:26px; height:26px; border-radius:50%;
-    background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:15px;
-    display:flex; align-items:center; justify-content:center; z-index:2; line-height:1;
+    width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background: var(--surface-2); border:1px solid var(--border); color: var(--text-muted); font-size:12px; flex-shrink:0;
     transition: transform .12s ease, background .12s ease, color .12s ease, border-color .12s ease;
   }
   .tile-heart:hover{ background: var(--teal-dim); border-color: var(--teal); color: var(--teal); transform: scale(1.12); }
   .reason-tile.liked .tile-heart{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; }
   .reason-tile.liked .tile-heart:hover{ transform: scale(1.12); filter: brightness(1.1); }
   .tile-nope{
-    position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
-    background: rgba(20,20,26,0.75); border:1px solid rgba(255,255,255,0.25); color:var(--red); font-size:12px; font-weight:700;
+    position:absolute; top:8px; right:8px; width:26px; height:26px; border-radius:50%;
+    background: rgba(0,0,0,0.8); border:none; color: var(--red); font-size:13px; font-weight:700;
     display:flex; align-items:center; justify-content:center; z-index:2;
-    transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    transition: transform .12s ease, background .12s ease, color .12s ease;
   }
-  .tile-nope:hover{ background: var(--red-dim); border-color: var(--red); transform: scale(1.12); }
+  .tile-nope:hover{ background: var(--red); color:#fff; transform: scale(1.12); }
   .tile-info-btn:hover{ background: var(--gold-dim); border-color: var(--gold); color: var(--gold); transform: scale(1.12); }
   .tile-platform{
-    position:absolute; top:28px; left:6px; z-index:2; display:flex; gap:3px;
+    position:absolute; bottom:8px; right:8px; z-index:2; display:flex; gap:3px;
   }
   .tile-platform .dot{
     width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    background: rgba(20,20,26,0.85); border:1px solid rgba(255,255,255,0.25); font-size:8px; font-weight:800; color:#fff;
+    background: rgba(0,0,0,0.85); border:1px solid rgba(255,255,255,0.3); font-size:8px; font-weight:800; color:#fff;
   }
 
   .game-question{
@@ -1368,13 +1373,22 @@ function renderSwipe(){
       const tile = el('div','select-tile reason-tile' + (liked ? ' liked' : ''));
       const ratingText = m.vote_average ? m.vote_average.toFixed(1) : null;
       tile.innerHTML = `
-        <img src="${posterUrl(m.poster_path,'w300')}">
-        ${ratingText ? `<div class="tile-rating">★ ${ratingText}</div>` : ''}
-        <div class="tile-platform" data-platform></div>
-        <div class="tile-nope" data-nope title="No me gusta">✕</div>
-        <div class="tile-info-btn" data-info>i</div>
-        <div class="tile-heart" data-heart>${liked ? '♥' : '♡'}</div>
-        <div class="tile-label">${m._reason ? `<span class="tile-reason">${m._reason}</span>` : ''}${titleOf(m)}</div>
+        <div class="tile-poster-wrap">
+          <img src="${posterUrl(m.poster_path,'w300')}">
+          ${ratingText ? `<div class="tile-rating">★ ${ratingText}</div>` : ''}
+          <div class="tile-nope" data-nope title="No me gusta">✕</div>
+          <div class="tile-platform" data-platform></div>
+        </div>
+        <div class="tile-footer">
+          ${m._reason ? `<div class="tile-reason">${m._reason}</div>` : ''}
+          <div class="tile-title-row">
+            <div class="tile-title">${titleOf(m)}</div>
+            <div class="tile-actions">
+              <div class="tile-info-btn" data-info>i</div>
+              <div class="tile-heart" data-heart>${liked ? '♥' : '♡'}</div>
+            </div>
+          </div>
+        </div>
       `;
       renderPlatformDots(tile.querySelector('[data-platform]'), m.id, m.media_type);
       tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
