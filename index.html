@@ -2173,9 +2173,19 @@ function withTimeout(promise, ms){
   ]);
 }
 
+async function detectRegion(){
+  try{
+    const res = await fetch(window.location.origin + '/api/geo');
+    if(!res.ok) return;
+    const data = await res.json();
+    if(data.country && /^[A-Z]{2}$/.test(data.country)){ state.region = data.country; }
+  }catch(e){ /* si falla, seguimos con la región por defecto */ }
+}
+
 async function init(){
   loadStorage();
   state.screen = 'loading'; render();
+  await detectRegion();
   try{ await withTimeout(verifyKeyAndLoadMeta(), 40000); }
   catch(e){
     state.error = e.kind === 'network' ? 'No se ha podido conectar con el servidor (o ha tardado demasiado). Comprueba tu conexión e inténtalo de nuevo.' : 'Ha ocurrido un problema al cargar los datos. Inténtalo de nuevo en unos segundos.';
