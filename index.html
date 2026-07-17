@@ -390,7 +390,7 @@
   .reason-grid{ grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .reason-tile{ display:flex; flex-direction:column; }
   .reason-tile.liked{ border-color: var(--gold); }
-  .tile-poster-wrap{ position:relative; }
+  .tile-poster-wrap{ position:relative; cursor:pointer; }
   .tile-poster-wrap img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; opacity:1; }
   .tile-footer{ background: var(--surface); padding:7px 6px 8px; }
   .tile-reason{ display:block; font-size:8px; text-transform:uppercase; letter-spacing:0.02em; color: var(--gold); font-weight:700; margin-bottom:4px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1403,6 +1403,7 @@ function renderSwipe(){
         </div>
       `;
       renderPlatformDots(tile.querySelector('[data-platform]'), m.id, m.media_type);
+      tile.querySelector('.tile-poster-wrap').onclick = () => openDetail(m);
       tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
       tile.querySelector('[data-heart]').onclick = (e) => {
         e.stopPropagation();
