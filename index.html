@@ -590,6 +590,9 @@ let state = {
   quizMovieReserve: [],
   quizActorPool: [],
   quizActorSelected: [],
+  searchQuery: '',
+  searchResults: [],
+  searchLoading: false,
   landingPosters: null,
   likedActors: [],   // [{id,name,profile_path}]
   likedDirectors: [],
@@ -1081,6 +1084,7 @@ function render(){
   if(state.screen === 'quiz-actors') return renderQuizActors();
   if(state.screen === 'swipe') return renderSwipe();
   if(state.screen === 'top') return renderTop();
+  if(state.screen === 'search') return renderSearch();
   if(state.screen === 'games') return renderGames();
   if(state.screen === 'mylist') return renderMyList();
 }
@@ -1634,6 +1638,61 @@ function paintTopList(container, list){
 }
 
 /* ---------- Mi lista ---------- */
+async function performSearch(query){
+  state.searchQuery = query;
+  if(query.trim().length < 2){ state.searchResults = []; render(); return; }
+  state.searchLoading = true;
+  render();
+  try{
+    const data = await tmdb('/search/multi', { query, language: 'es-ES', include_adult: 'false' });
+    state.searchResults = (data.results||[]).filter(m => (m.media_type === 'movie' || m.media_type === 'tv') && m.poster_path);
+  }catch(e){ state.searchResults = []; }
+  state.searchLoading = false;
+  render();
+}
+
+function renderSearch(){
+  app.innerHTML = '';
+  const wrap = el('div');
+  wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Buscar</div>`));
+  wrap.appendChild(el('p','lead','Encuentra una película o serie concreta, aunque no te la hayamos recomendado todavía.'));
+
+  const searchWrap = el('div','framed-search-row');
+  const input = el('input');
+  input.type = 'text'; input.placeholder = 'Busca un título...'; input.value = state.searchQuery;
+  input.autocomplete = 'off';
+  let debounce;
+  input.oninput = (e) => { clearTimeout(debounce); const v = e.target.value; debounce = setTimeout(() => performSearch(v), 350); };
+  searchWrap.appendChild(input);
+  wrap.appendChild(searchWrap);
+
+  const results = el('div');
+  if(state.searchLoading){
+    results.appendChild(el('p','lead','Buscando...'));
+  } else if(state.searchQuery.trim().length >= 2 && !state.searchResults.length){
+    results.appendChild(el('div','empty-mini','Sin resultados para eso.'));
+  } else {
+    state.searchResults.forEach(m => {
+      const row = el('div','list-row');
+      row.innerHTML = `
+        <img class="list-poster" src="${m.poster_path ? posterUrl(m.poster_path,'w154') : ''}">
+        <div class="list-info">
+          <div class="t">${mt(m.media_type).icon} ${titleOf(m)}</div>
+          <div class="m">${(dateOf(m)||'').slice(0,4)}</div>
+          <div style="display:flex; gap:4px; margin-top:4px;" data-providers></div>
+        </div>
+        <div class="list-score">★ ${m.vote_average ? m.vote_average.toFixed(1) : '—'}</div>
+      `;
+      row.onclick = () => openDetail(m);
+      results.appendChild(row);
+      renderProviderChips(row.querySelector('[data-providers]'), m.id, m.media_type);
+    });
+  }
+  wrap.appendChild(results);
+  app.appendChild(wrap);
+  appendBottomNav('search');
+}
+
 function renderMyList(){
   app.innerHTML = '';
   const wrap = el('div');
@@ -1773,6 +1832,7 @@ function appendBottomNav(active){
   const inner = el('div','bottom-nav-inner');
   const items = [
     { key: 'swipe', icon: '🎬', label: 'Descubrir' },
+    { key: 'search', icon: '🔍', label: 'Buscar' },
     { key: 'top', icon: '★', label: 'Top' },
     { key: 'games', icon: '🎮', label: 'Retos' },
     { key: 'mylist', icon: '☰', label: 'Mi lista' }
