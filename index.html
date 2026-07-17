@@ -1272,6 +1272,7 @@ function renderLanding(){
       <a href="/qwatch/hbo-max.html">Qué ver en HBO Max</a>
       <a href="/qwatch/disney-plus.html">Qué ver en Disney+</a>
       <a href="/qwatch/prime-video.html">Qué ver en Prime Video</a>
+      <a href="/privacidad.html">Privacidad</a>
     </div>
   `);
   content.appendChild(inner);
@@ -1835,6 +1836,7 @@ function renderMyList(){
         <button class="btn ghost small-btn" data-email-send>Enviar enlace</button>
       </div>
       ${state.authMessage ? `<p class="account-note" style="margin-top:10px; color:var(--gold);">${state.authMessage}</p>` : ''}
+      <p class="account-note" style="margin-top:12px;">Al iniciar sesión aceptas nuestra <a href="/privacidad.html" target="_blank" style="color:var(--text-muted); text-decoration:underline;">política de privacidad</a>.</p>
     `;
     account.querySelector('[data-google]').onclick = () => signInWithGoogle();
     const emailInput = account.querySelector('[data-email-input]');
