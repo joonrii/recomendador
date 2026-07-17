@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Política de privacidad — Sesión Continua</title>
+<meta name="description" content="Qué datos guarda Sesión Continua, para qué los usa, y cómo puedes borrarlos." />
+<link rel="canonical" href="https://recomendador-ten.vercel.app/privacidad.html" />
+<meta name="robots" content="index, follow" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ font-family:'Space Grotesk',sans-serif; background:#0B0A14; color:#F5F4FF; line-height:1.65; }
+  .wrap{ max-width:680px; margin:0 auto; padding:32px 20px 70px; }
+  a.back{ color:#918EAD; font-size:13px; text-decoration:none; }
+  h1{ font-size:28px; margin:18px 0 6px; }
+  .updated{ color:#78759A; font-size:12.5px; margin-bottom:30px; }
+  h2{ font-size:17px; margin:28px 0 10px; color:#C084FC; }
+  p, li{ font-size:14px; color:#C8C6DA; }
+  ul{ padding-left:20px; margin:8px 0; }
+  li{ margin-bottom:6px; }
+  a{ color:#C084FC; }
+  .box{ background:#17151F; border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:16px 18px; margin:20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Sesión Continua</a>
+  <h1>Política de privacidad</h1>
+  <p class="updated">Última actualización: julio de 2026</p>
+
+  <p>Esta página explica, en lenguaje claro y sin letra pequeña innecesaria, qué datos guarda Sesión Continua, para qué se usan, y cómo puedes borrarlos cuando quieras. Es un proyecto personal, sin ánimo de lucro, gestionado por una sola persona.</p>
+
+  <h2>Qué puedes usar sin dar ningún dato</h2>
+  <p>Toda la app funciona sin crear cuenta. Como invitado, tus plataformas y tus gustos (me gusta, no me gusta, por ver) se guardan únicamente en tu propio navegador (almacenamiento local), nunca en un servidor. Si borras los datos del navegador o cambias de dispositivo, se pierden — es la contrapartida de que no salgan de tu equipo.</p>
+
+  <h2>Si decides crear una cuenta</h2>
+  <p>Iniciar sesión es siempre opcional. Si lo haces (por email o con Google), guardamos:</p>
+  <ul>
+    <li>Tu dirección de email (o los datos básicos de perfil que Google comparte al iniciar sesión: nombre y foto, si los proporcionas).</li>
+    <li>Tus plataformas de streaming marcadas.</li>
+    <li>Tus películas y series marcadas como "me gusta", "no me gusta" y "por ver".</li>
+    <li>Tu racha en los Retos.</li>
+  </ul>
+  <p>Esto se guarda en <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Supabase</a>, el proveedor de base de datos que usamos, con acceso restringido para que nadie pueda ver ni modificar los datos de otra persona salvo tú misma/o.</p>
+
+  <div class="box">
+    <strong>Lo que nunca hacemos:</strong> no vendemos tus datos, no los compartimos con terceros para publicidad, y no mostramos anuncios en la app.
+  </div>
+
+  <h2>Servicios externos que usamos</h2>
+  <ul>
+    <li><strong>TMDB (The Movie Database)</strong>: fuente de toda la información de películas y series (pósters, sinopsis, disponibilidad en streaming). Cuando usas la app, se hacen consultas a su API a través de nuestro propio servidor, sin exponer ninguna clave. Más info en su <a href="https://www.themoviedb.org/privacy-policy" target="_blank" rel="noopener">política de privacidad</a>.</li>
+    <li><strong>Supabase</strong>: guarda tu cuenta y tus datos si inicias sesión.</li>
+    <li><strong>Google</strong>: si eliges "Continuar con Google", Google gestiona esa autenticación según sus propias condiciones.</li>
+    <li><strong>Google Analytics (GA4)</strong>: recogemos estadísticas de uso agregadas y anónimas (qué páginas se visitan, desde qué país aproximadamente) para entender cómo se usa la app. No se cruza con tu identidad si no has iniciado sesión.</li>
+  </ul>
+
+  <h2>Cómo borrar tus datos</h2>
+  <p>Si usas la app como invitado, ve a "Mi lista" → "Restablecer todo" — borra todo lo guardado en tu navegador al instante.</p>
+  <p>Si tienes una cuenta y quieres que borremos tus datos del servidor por completo, escribe a la dirección de contacto de abajo indicando el email con el que te registraste, y lo eliminaremos en un plazo razonable.</p>
+
+  <h2>Menores de edad</h2>
+  <p>Esta app no está dirigida a menores de 14 años ni recoge datos de forma consciente de menores de esa edad.</p>
+
+  <h2>Contacto</h2>
+  <p>Para cualquier duda sobre tus datos o esta política, puedes escribir a través del propio proyecto en <a href="https://github.com/joonrii/recomendador" target="_blank" rel="noopener">su repositorio en GitHub</a>.</p>
+
+  <h2>Cambios en esta política</h2>
+  <p>Si esta página cambia de forma relevante, se actualizará la fecha de arriba. El uso continuado de la app después de un cambio implica la aceptación de la política actualizada.</p>
+</div>
+</body>
+</html>
