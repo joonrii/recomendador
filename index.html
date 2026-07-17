@@ -1553,7 +1553,7 @@ async function renderTop(){
   wrap.appendChild(platRow);
 
   const activeSort = TOP_SORTS.find(s => s.key === filters.sortKey);
-  wrap.appendChild(el('p','lead', activeSort.trending ? 'Lo más visto esta semana en todo TMDB (no filtrado por plataforma, pero cada fila te dice si está en las tuyas).' : `${activeSort.label}, disponibles en las plataformas marcadas arriba.`));
+  wrap.appendChild(el('p','lead', activeSort.trending ? 'Lo más visto esta semana que ya está en streaming en algún sitio (no solo tus plataformas) — sin contar lo que aún está solo en cines.' : `${activeSort.label}, disponibles en las plataformas marcadas arriba.`));
 
   const listWrap = el('div');
   wrap.appendChild(listWrap);
@@ -1573,8 +1573,17 @@ async function renderTop(){
   try{
     let results;
     if(activeSort.trending){
-      const data = await tmdb('/trending/movie/week', { language: 'es-ES' });
-      results = (data.results||[]).filter(m=>m.poster_path).map(m => ({ ...m, media_type: 'movie' }));
+      const [d1, d2] = await Promise.all([
+        tmdb('/trending/movie/week', { language: 'es-ES', page: 1 }),
+        tmdb('/trending/movie/week', { language: 'es-ES', page: 2 })
+      ]);
+      const raw = [...(d1.results||[]), ...(d2.results||[])].filter(m=>m.poster_path).map(m => ({ ...m, media_type: 'movie' }));
+      // descartamos las que aún están solo en cines y no tienen streaming en ningún sitio todavía
+      const checked = await Promise.all(raw.map(async m => {
+        const providers = await fetchProviders(m.id, 'movie');
+        return providers.length ? m : null;
+      }));
+      results = checked.filter(Boolean);
     } else {
       const providerIds = filters.platforms.map(p => state.providerIds[p]).filter(Boolean);
       results = await fetchDiscoverPage(1, { sortBy: activeSort.sortBy, minVotes: activeSort.minVotes, mediaType: 'movie', watchProviderIds: providerIds });
