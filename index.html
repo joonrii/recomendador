@@ -1074,6 +1074,26 @@ const app = document.getElementById('app');
 function el(tag, cls, html){ const e = document.createElement(tag); if(cls) e.className = cls; if(html!==undefined) e.innerHTML = html; return e; }
 
 function render(){
+  // guardamos qué campo de texto tenía el foco (y por dónde iba el cursor) antes de redibujar,
+  // porque reconstruimos la pantalla entera y si no, se perdería el foco al escribir
+  const active = document.activeElement;
+  let focusInfo = null;
+  if(active && active.tagName === 'INPUT' && active.dataset && active.dataset.focusId){
+    focusInfo = { id: active.dataset.focusId, start: active.selectionStart, end: active.selectionEnd };
+  }
+
+  renderScreen();
+
+  if(focusInfo){
+    const restored = app.querySelector(`[data-focus-id="${focusInfo.id}"]`);
+    if(restored){
+      restored.focus();
+      try{ restored.setSelectionRange(focusInfo.start, focusInfo.end); }catch(e){}
+    }
+  }
+}
+
+function renderScreen(){
   app.innerHTML = '';
   if(state.screen !== 'swipe' && state.screen !== 'quiz'){ setBackdrop(null); }
   if(state.screen === 'loading') return renderLoading();
@@ -1660,6 +1680,7 @@ function renderSearch(){
   const searchWrap = el('div','framed-search-row');
   const input = el('input');
   input.type = 'text'; input.placeholder = 'Busca un título...'; input.value = state.searchQuery;
+  input.dataset.focusId = 'global-search';
   input.autocomplete = 'off';
   let debounce;
   input.oninput = (e) => { clearTimeout(debounce); const v = e.target.value; debounce = setTimeout(() => performSearch(v), 350); };
@@ -2221,6 +2242,7 @@ function renderFramedScreen(){
       const searchWrap = el('div','framed-search-row');
       const input = el('input');
       input.type = 'text'; input.placeholder = 'Escribe el título de la película...'; input.value = fg.query;
+      input.dataset.focusId = 'framed-search';
       input.autocomplete = 'off';
       let debounce;
       input.oninput = (e) => { clearTimeout(debounce); const v = e.target.value; debounce = setTimeout(() => framedSearch(v), 300); };
