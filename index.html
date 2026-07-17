@@ -262,6 +262,12 @@
   .remove-x{ color: var(--text-muted); font-size:16px; padding:4px 6px; cursor:pointer; flex-shrink:0; }
 
   .stat-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:10px; margin: 14px 0 22px; }
+  .account-box{ background: var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:18px; }
+  .account-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .account-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.03em; color: var(--text-muted); margin-bottom:2px; }
+  .account-email{ font-size:14px; font-weight:600; }
+  .account-note{ font-size:12px; color: var(--text-muted); line-height:1.5; margin-top:8px; }
+  .small-btn{ padding: 9px 14px !important; font-size:12.5px !important; margin-top:0 !important; width:auto !important; white-space:nowrap; }
   .stat-card{ background: var(--surface); border-radius:12px; padding: 12px; text-align:center; border:1px solid var(--border); }
   .stat-card .num{ font-size:20px; font-weight:700; color: var(--gold); }
   .stat-card .lbl{ font-size:11px; color: var(--text-muted); margin-top:2px; }
@@ -523,6 +529,7 @@
   }
 
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div id="grid-layer"></div>
@@ -556,6 +563,11 @@ const PROVIDER_QUERY = {
   hbo:     { label: 'HBO Max', dot: '#7C6CE8', names: ['Max','HBO Max'] },
   prime:   { label: 'Prime Video', dot: '#2E9CD9', names: ['Amazon Prime Video','Prime Video'] }
 };
+
+/* ---------- cuentas de usuario (Supabase): opcional, nunca bloqueante ---------- */
+const SUPABASE_URL = 'https://sjkqljmbhlyruxxphtpv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqa3Fsam1iaGx5cnV4eHBodHB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyODE5MzUsImV4cCI6MjA5OTg1NzkzNX0.G-PxaUxzlComT7a73RJRaGt_lz5AEBLjsHPbw_n0_ms';
+const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 let state = {
   screen: 'loading',
@@ -593,6 +605,9 @@ let state = {
   searchQuery: '',
   searchResults: [],
   searchLoading: false,
+  user: null,
+  authBusy: false,
+  authMessage: '',
   landingPosters: null,
   likedActors: [],   // [{id,name,profile_path}]
   likedDirectors: [],
@@ -618,8 +633,83 @@ function loadStorage(){
   recomputeGenreScores();
 }
 function saveStreak(){ storeSet('gameStreak', state.streak); }
-function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); }
-function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist, likedActors: state.likedActors, likedDirectors: state.likedDirectors, actorScores: state.actorScores, directorScores: state.directorScores}); }
+function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); syncToCloud(); }
+function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist, likedActors: state.likedActors, likedDirectors: state.likedDirectors, actorScores: state.actorScores, directorScores: state.directorScores}); syncToCloud(); }
+
+/* ---------- sincronización con la cuenta (si hay sesión; si no, no hace nada) ---------- */
+let syncDebounce = null;
+function syncToCloud(){
+  if(!sb || !state.user) return;
+  clearTimeout(syncDebounce);
+  syncDebounce = setTimeout(async () => {
+    try{
+      await sb.from('profiles').upsert({ user_id: state.user.id, platforms: state.platforms, streak: state.streak, updated_at: new Date().toISOString() });
+      await sb.from('taste').upsert({
+        user_id: state.user.id, liked: state.liked, disliked: state.disliked, watchlist: state.watchlist,
+        actor_scores: state.actorScores, director_scores: state.directorScores, updated_at: new Date().toISOString()
+      });
+    }catch(e){ console.error('Error sincronizando con la nube', e); }
+  }, 1200);
+}
+
+async function loadFromCloud(){
+  if(!sb || !state.user) return;
+  const [{ data: profile }, { data: taste }] = await Promise.all([
+    sb.from('profiles').select('*').eq('user_id', state.user.id).maybeSingle(),
+    sb.from('taste').select('*').eq('user_id', state.user.id).maybeSingle()
+  ]);
+  if(profile || taste){
+    // ya había datos guardados en la nube para esta cuenta (entraste desde otro sitio antes): mandan ellos
+    if(profile){ state.platforms = profile.platforms || []; state.streak = profile.streak || 0; }
+    if(taste){
+      state.liked = taste.liked || []; state.disliked = taste.disliked || []; state.watchlist = taste.watchlist || [];
+      state.actorScores = taste.actor_scores || {}; state.directorScores = taste.director_scores || {};
+    }
+    storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds});
+    storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist, actorScores: state.actorScores, directorScores: state.directorScores});
+    storeSet('gameStreak', state.streak);
+    recomputeGenreScores();
+  } else {
+    // primera vez con esta cuenta: subimos lo que ya tenías como invitado
+    syncToCloud();
+  }
+}
+
+async function signInWithEmail(email){
+  if(!sb) return;
+  state.authBusy = true; state.authMessage = ''; render();
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+  state.authBusy = false;
+  state.authMessage = error ? 'No se ha podido enviar el enlace. Revisa el email e inténtalo de nuevo.' : '¡Enlace enviado! Revisa tu correo (y la carpeta de spam) y toca el enlace para entrar.';
+  render();
+}
+async function signInWithGoogle(){
+  if(!sb) return;
+  await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+}
+async function signOut(){
+  if(!sb) return;
+  await sb.auth.signOut();
+  state.user = null;
+  render();
+}
+async function initAuth(){
+  if(!sb) return;
+  const { data } = await sb.auth.getSession();
+  if(data && data.session){
+    state.user = data.session.user;
+    await loadFromCloud();
+  }
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if(session && session.user && (!state.user || state.user.id !== session.user.id)){
+      state.user = session.user;
+      await loadFromCloud();
+      render();
+    } else if(!session){
+      state.user = null;
+    }
+  });
+}
 
 function recomputeGenreScores(){
   const scores = {};
@@ -1719,6 +1809,43 @@ function renderMyList(){
   const wrap = el('div');
   wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Mi lista</div>`));
 
+  const account = el('div','account-box');
+  if(state.user){
+    account.innerHTML = `
+      <div class="account-row">
+        <div>
+          <div class="account-label">Sesión iniciada</div>
+          <div class="account-email">${state.user.email || 'Cuenta de Google'}</div>
+        </div>
+        <button class="btn ghost small-btn" data-signout>Cerrar sesión</button>
+      </div>
+      <p class="account-note">Tus gustos y plataformas se guardan en tu cuenta — puedes entrar desde cualquier dispositivo sin perder nada.</p>
+    `;
+    account.querySelector('[data-signout]').onclick = () => signOut();
+  } else if(!sb){
+    account.innerHTML = `<p class="account-note">El inicio de sesión no está disponible ahora mismo (todo se guarda igualmente en este navegador).</p>`;
+  } else {
+    account.innerHTML = `
+      <div class="account-label" style="margin-bottom:8px;">Estás como invitado</div>
+      <p class="account-note" style="margin-bottom:12px;">Todo funciona igual sin cuenta — se guarda en este navegador. Si quieres acceder desde varios dispositivos sin perder tus gustos, puedes iniciar sesión (opcional, nunca obligatorio).</p>
+      <button class="btn" data-google style="margin-top:0;">Continuar con Google</button>
+      <div style="display:flex; align-items:center; gap:10px; margin:14px 0;"><div style="flex:1; height:1px; background:var(--border);"></div><span style="font-size:11px; color:var(--text-muted);">o con email</span><div style="flex:1; height:1px; background:var(--border);"></div></div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" data-email-input placeholder="tu@email.com" style="flex:1; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:11px 12px; border-radius:10px; font-size:13px; font-family:inherit; outline:none;">
+        <button class="btn ghost small-btn" data-email-send>Enviar enlace</button>
+      </div>
+      ${state.authMessage ? `<p class="account-note" style="margin-top:10px; color:var(--gold);">${state.authMessage}</p>` : ''}
+    `;
+    account.querySelector('[data-google]').onclick = () => signInWithGoogle();
+    const emailInput = account.querySelector('[data-email-input]');
+    emailInput.dataset.focusId = 'account-email';
+    account.querySelector('[data-email-send]').onclick = () => {
+      const val = emailInput.value.trim();
+      if(val && val.includes('@')) signInWithEmail(val);
+    };
+  }
+  wrap.appendChild(account);
+
   const stats = el('div','stat-grid');
   stats.style.gridTemplateColumns = 'repeat(4, 1fr)';
   stats.innerHTML = `
@@ -2306,6 +2433,7 @@ async function detectRegion(){
 async function init(){
   loadStorage();
   state.screen = 'loading'; render();
+  await initAuth();
   await detectRegion();
   try{ await withTimeout(verifyKeyAndLoadMeta(), 40000); }
   catch(e){
