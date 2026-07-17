@@ -1829,8 +1829,6 @@ function renderMyList(){
     account.innerHTML = `
       <div class="account-label" style="margin-bottom:8px;">Estás como invitado</div>
       <p class="account-note" style="margin-bottom:12px;">Todo funciona igual sin cuenta — se guarda en este navegador. Si quieres acceder desde varios dispositivos sin perder tus gustos, puedes iniciar sesión (opcional, nunca obligatorio).</p>
-      <button class="btn" data-google style="margin-top:0;">Continuar con Google</button>
-      <div style="display:flex; align-items:center; gap:10px; margin:14px 0;"><div style="flex:1; height:1px; background:var(--border);"></div><span style="font-size:11px; color:var(--text-muted);">o con email</span><div style="flex:1; height:1px; background:var(--border);"></div></div>
       <div style="display:flex; gap:8px;">
         <input type="text" data-email-input placeholder="tu@email.com" style="flex:1; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:11px 12px; border-radius:10px; font-size:13px; font-family:inherit; outline:none;">
         <button class="btn ghost small-btn" data-email-send>Enviar enlace</button>
@@ -1838,7 +1836,6 @@ function renderMyList(){
       ${state.authMessage ? `<p class="account-note" style="margin-top:10px; color:var(--gold);">${state.authMessage}</p>` : ''}
       <p class="account-note" style="margin-top:12px;">Al iniciar sesión aceptas nuestra <a href="/privacidad.html" target="_blank" style="color:var(--text-muted); text-decoration:underline;">política de privacidad</a>.</p>
     `;
-    account.querySelector('[data-google]').onclick = () => signInWithGoogle();
     const emailInput = account.querySelector('[data-email-input]');
     emailInput.dataset.focusId = 'account-email';
     account.querySelector('[data-email-send]').onclick = () => {
