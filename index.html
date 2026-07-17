@@ -61,11 +61,7 @@
   *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html,body{ margin:0; padding:0; min-height:100%; overflow-x:hidden; }
   body{
-    background:
-      radial-gradient(700px circle at 88% 8%, #7C3AED3d, transparent 60%),
-      radial-gradient(600px circle at 8% 96%, #EC48992e, transparent 55%),
-      radial-gradient(600px circle at 50% 50%, #06B6D422, transparent 60%),
-      var(--bg);
+    background: var(--bg);
     background-attachment: fixed;
     color: var(--text);
     font-family: 'Space Grotesk', sans-serif;
@@ -79,6 +75,15 @@
     content:""; position:fixed; inset:0; pointer-events:none; opacity:0.05; mix-blend-mode:overlay; z-index:1;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
+  #ambient-blobs{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .blob{ position:absolute; border-radius:50%; filter:blur(70px); opacity:0.35; }
+  .blob-1{ width:340px; height:340px; background:#7C3AED; top:-80px; left:-80px; animation: blobFloat1 16s ease-in-out infinite; }
+  .blob-2{ width:300px; height:300px; background:#EC4899; bottom:-60px; right:-60px; animation: blobFloat2 19s ease-in-out infinite; }
+  .blob-3{ width:260px; height:260px; background:#06B6D4; top:45%; left:50%; opacity:0.22; animation: blobFloat3 22s ease-in-out infinite; }
+  @keyframes blobFloat1{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(60px,80px); } }
+  @keyframes blobFloat2{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(-50px,-70px); } }
+  @keyframes blobFloat3{ 0%,100%{ transform:translate(-50%,0); } 50%{ transform:translate(calc(-50% + 50px), -70px); } }
+  @media (prefers-reduced-motion: reduce){ .blob{ animation: none !important; } }
   #grid-layer{
     position:fixed; inset:0; z-index:0; pointer-events:none;
     background-image:
@@ -371,6 +376,18 @@
   }
   .ctoggle-seg.active{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; box-shadow: 0 4px 14px #C084FC44; }
 
+  .mood-row{ display:flex; gap:7px; overflow-x:auto; padding-bottom:4px; margin-bottom:14px; }
+  .mood-chip{
+    flex-shrink:0; background: var(--surface); border:1px solid var(--border); color: var(--text-muted);
+    font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:20px; cursor:pointer; white-space:nowrap;
+    transition: all .15s ease;
+  }
+  .mood-chip.active{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; }
+
+  .lang-toggle{ display:flex; gap:4px; justify-content:center; margin-bottom:14px; position:relative; z-index:2; }
+  .lang-seg{ background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#918EAD; font-size:11px; font-weight:700; padding:5px 12px; border-radius:20px; cursor:pointer; }
+  .lang-seg.active{ background: linear-gradient(135deg, var(--gold), var(--gold-2)); color:#1A0B2E; border-color:transparent; }
+
   .select-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 18px; }
   .select-tile{ position:relative; cursor:pointer; border-radius:12px; overflow:hidden; border:3px solid transparent; background:var(--surface-2); }
   .select-tile img{ width:100%; aspect-ratio:2/3; object-fit:cover; display:block; opacity:0.82; transition: opacity .15s; }
@@ -532,6 +549,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<div id="ambient-blobs"><div class="blob blob-1"></div><div class="blob blob-2"></div><div class="blob blob-3"></div></div>
 <div id="grid-layer"></div>
 <div id="backdrop-layer"></div>
 <div id="backdrop-vignette"></div>
@@ -608,6 +626,8 @@ let state = {
   user: null,
   authBusy: false,
   authMessage: '',
+  activeMood: null,
+  lang: 'es',
   landingPosters: null,
   likedActors: [],   // [{id,name,profile_path}]
   likedDirectors: [],
@@ -630,8 +650,13 @@ function loadStorage(){
   if(t){ state.liked = t.liked||[]; state.disliked = t.disliked||[]; state.watchlist = t.watchlist||[]; state.likedActors = t.likedActors||[]; state.likedDirectors = t.likedDirectors||[]; state.actorScores = t.actorScores||{}; state.directorScores = t.directorScores||{}; }
   const g = storeGet('gameStreak');
   if(typeof g === 'number') state.streak = g;
+  const savedLang = storeGet('lang');
+  if(savedLang === 'es' || savedLang === 'en'){ state.lang = savedLang; }
+  else { state.lang = (navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en'; }
+  document.documentElement.lang = state.lang;
   recomputeGenreScores();
 }
+function setLang(lang){ state.lang = lang; storeSet('lang', lang); document.documentElement.lang = lang; }
 function saveStreak(){ storeSet('gameStreak', state.streak); }
 function saveSettings(){ storeSet('settings', {platforms: state.platforms, providerIds: state.providerIds}); syncToCloud(); }
 function saveTaste(){ storeSet('taste', {liked: state.liked, disliked: state.disliked, watchlist: state.watchlist, likedActors: state.likedActors, likedDirectors: state.likedDirectors, actorScores: state.actorScores, directorScores: state.directorScores}); syncToCloud(); }
@@ -772,7 +797,7 @@ async function tmdb(path, params={}, _retry){
 }
 
 async function verifyKeyAndLoadMeta(){
-  const movieGenres = await tmdb('/genre/movie/list', { language: 'es-ES' });
+  const movieGenres = await tmdb('/genre/movie/list', { language: apiLang() });
   const provList = await tmdb('/watch/providers/movie', { watch_region: state.region });
   state.genreMaps.movie = {}; movieGenres.genres.forEach(g => state.genreMaps.movie[g.id] = g.name);
 
@@ -788,7 +813,7 @@ let tvGenresLoading = null;
 async function ensureTvGenres(){
   if(Object.keys(state.genreMaps.tv).length) return;
   if(!tvGenresLoading){
-    tvGenresLoading = tmdb('/genre/tv/list', { language: 'es-ES' })
+    tvGenresLoading = tmdb('/genre/tv/list', { language: apiLang() })
       .then(data => { state.genreMaps.tv = {}; data.genres.forEach(g => state.genreMaps.tv[g.id] = g.name); })
       .catch(() => {}) // si falla, seguimos sin nombres de género de serie, no es crítico
       .finally(() => { tvGenresLoading = null; });
@@ -807,7 +832,7 @@ async function fetchDiscoverPage(page, opts={}){
     watch_monetization_types: 'flatrate',
     sort_by: opts.sortBy || 'popularity.desc',
     'vote_count.gte': opts.minVotes || 150,
-    language: 'es-ES',
+    language: apiLang(),
     page
   };
   if(opts.genre) params.with_genres = opts.genre;
@@ -857,14 +882,28 @@ function topDirector(){
 // - actor/director favoritos, aprendidos de lo que marcas con ♥ (y de lo elegido en el onboarding)
 // - género favorito
 // - descubrimiento general diversificado, para no estancarse siempre en lo mismo
+const MOODS = {
+  reir:      { label: '😂 Reír',        genres: '35',           reason: 'Para reírte un rato' },
+  miedo:     { label: '😱 Miedo',       genres: '27',           reason: 'Para pasar miedo' },
+  ligero:    { label: '😌 Ligero',      genres: '10751|16',     reason: 'Algo ligero y tranquilo' },
+  emocion:   { label: '😢 Emocionarme', genres: '18',           reason: 'Para emocionarte' },
+  pensar:    { label: '🤯 Pensar',      genres: '878|9648',     reason: 'Para darle vueltas a la cabeza' },
+  adrenalina:{ label: '🔥 Adrenalina',  genres: '28|53',        reason: 'Acción sin parar' },
+};
+
 async function pickCandidates(page){
   const roll = Math.random();
   const cfg = mt();
   const tag = (list, reason) => (list||[]).map(m => ({ ...m, media_type: state.mediaType, _reason: reason }));
+  // si hay un estado de ánimo activo, manda por encima de cualquier otra estrategia
+  if(state.activeMood && MOODS[state.activeMood]){
+    const mood = MOODS[state.activeMood];
+    return tag(await fetchDiscoverPage(page, { genre: mood.genres }), mood.reason);
+  }
   // tendencia real: lo más visto ahora mismo (fuerte peso, para que reconozcas lo que sale)
   if(roll < 0.30){
     try{
-      const data = await tmdb(state.mediaType === 'movie' ? '/trending/movie/week' : '/trending/tv/week', { language:'es-ES', page: Math.max(1, page % 3) });
+      const data = await tmdb(state.mediaType === 'movie' ? '/trending/movie/week' : '/trending/tv/week', { language:apiLang(), page: Math.max(1, page % 3) });
       if((data.results||[]).length) return tag(data.results, 'Tendencia esta semana');
     }catch(e){}
   }
@@ -873,7 +912,7 @@ async function pickCandidates(page){
     const seedPool = state.liked.filter(m=>(m.media_type||'movie')===state.mediaType).slice(-15);
     const seed = seedPool[Math.floor(Math.random()*seedPool.length)];
     try{
-      const data = await tmdb(cfg.recommendations(seed.id), { language:'es-ES', page:1 });
+      const data = await tmdb(cfg.recommendations(seed.id), { language:apiLang(), page:1 });
       if((data.results||[]).length) return tag(data.results, `Porque te gustó ${seed.title}`);
     }catch(e){}
   }
@@ -954,6 +993,7 @@ async function findTrailer(movieId, mediaType){
   }catch(e){ return null; }
 }
 
+function apiLang(){ return state.lang === 'en' ? 'en-US' : 'es-ES'; }
 function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w500'}${path}` : null; }
 
 async function fetchProviders(movieId, type){
@@ -1162,6 +1202,16 @@ async function scoreCreditsForLike(movie){
 /* ---------- construcción de UI ---------- */
 const app = document.getElementById('app');
 function el(tag, cls, html){ const e = document.createElement(tag); if(cls) e.className = cls; if(html!==undefined) e.innerHTML = html; return e; }
+// hace que un elemento clicable (div) también funcione con teclado (Tab + Enter/Espacio) y lectores de pantalla
+function a11yButton(node, label){
+  node.setAttribute('role', 'button');
+  node.setAttribute('tabindex', '0');
+  if(label) node.setAttribute('aria-label', label);
+  node.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); node.click(); }
+  });
+  return node;
+}
 
 function render(){
   // guardamos qué campo de texto tenía el foco (y por dónde iba el cursor) antes de redibujar,
@@ -1218,8 +1268,8 @@ async function loadLandingPosters(){
   if(state.landingPosters && state.landingPosters.length) return state.landingPosters;
   try{
     const [p1, p2] = await Promise.all([
-      tmdb('/trending/movie/week', { language: 'es-ES' }),
-      tmdb('/movie/popular', { language: 'es-ES', page: 2 })
+      tmdb('/trending/movie/week', { language: apiLang() }),
+      tmdb('/movie/popular', { language: apiLang(), page: 2 })
     ]);
     const all = [...(p1.results||[]), ...(p2.results||[])].filter(m => m.poster_path);
     state.landingPosters = all.slice(0, 24).map(m => posterUrl(m.poster_path, 'w300'));
@@ -1251,23 +1301,47 @@ function renderLanding(){
   lp.appendChild(el('div','lp-mesh'));
 
   const content = el('div','lp-content');
+
+  const langToggle = el('div','lang-toggle');
+  ['es','en'].forEach(l => {
+    const seg = el('div','lang-seg' + (state.lang===l ? ' active' : ''), l.toUpperCase());
+    seg.onclick = () => { setLang(l); render(); };
+    langToggle.appendChild(seg);
+  });
+  content.appendChild(langToggle);
+
   const inner = el('div','lp-inner');
+  const L = state.lang === 'en' ? {
+    pill: '✨ <b>Real recommendations</b> — matched to your platforms',
+    h1a: 'Find your', h1b: 'next obsession',
+    sub: 'A quick test to learn your real taste, then we only show you what you can actually watch right now on Netflix, HBO Max, Disney+ or Prime Video.',
+    cta: 'Start your test →',
+    step1: 'Pick your platforms', step2: 'Mark what you like', step3: 'Get your recommendations',
+    also: 'Also see:'
+  } : {
+    pill: '✨ <b>Recomendaciones reales</b> — cruzadas con tus plataformas',
+    h1a: 'Encuentra tu', h1b: 'próxima obsesión',
+    sub: 'Un test rápido para conocer tus gustos de verdad, y a partir de ahí solo te enseñamos lo que puedes ver ya en Netflix, HBO Max, Disney+ o Prime Video.',
+    cta: 'Comienza tu test →',
+    step1: 'Elige tus plataformas', step2: 'Marca lo que te gusta', step3: 'Recibe tus recomendaciones',
+    also: 'Ver también:'
+  };
   inner.innerHTML = `
-    <div class="lp-pill">✨ <b>Recomendaciones reales</b> — cruzadas con tus plataformas</div>
-    <h1>Encuentra tu<br><span class="grad">próxima obsesión</span></h1>
-    <p class="lp-sub">Un test rápido para conocer tus gustos de verdad, y a partir de ahí solo te enseñamos lo que puedes ver ya en Netflix, HBO Max, Disney+ o Prime Video.</p>
+    <div class="lp-pill">${L.pill}</div>
+    <h1>${L.h1a}<br><span class="grad">${L.h1b}</span></h1>
+    <p class="lp-sub">${L.sub}</p>
   `;
-  const cta = el('button','lp-cta','Comienza tu test →');
+  const cta = el('button','lp-cta', L.cta);
   cta.onclick = () => { state.screen = 'platforms'; render(); };
   inner.appendChild(cta);
   inner.insertAdjacentHTML('beforeend', `
     <div class="lp-steps">
-      <span><b>1.</b> Elige tus plataformas</span>
-      <span><b>2.</b> Marca lo que te gusta</span>
-      <span><b>3.</b> Recibe tus recomendaciones</span>
+      <span><b>1.</b> ${L.step1}</span>
+      <span><b>2.</b> ${L.step2}</span>
+      <span><b>3.</b> ${L.step3}</span>
     </div>
     <div class="lp-seo-links">
-      <span>Ver también:</span>
+      <span>${L.also}</span>
       <a href="/qwatch/netflix.html">Qué ver en Netflix</a>
       <a href="/qwatch/hbo-max.html">Qué ver en HBO Max</a>
       <a href="/qwatch/disney-plus.html">Qué ver en Disney+</a>
@@ -1318,11 +1392,11 @@ function renderPlatforms(){
 
 async function ensureQuizMoviePool(){
   const [pop1, pop2, pop3, top1, top2] = await Promise.all([
-    tmdb('/movie/popular', { language:'es-ES', page:1 }),
-    tmdb('/movie/popular', { language:'es-ES', page:2 }),
-    tmdb('/movie/popular', { language:'es-ES', page:3 }),
-    tmdb('/movie/top_rated', { language:'es-ES', page:1 }),
-    tmdb('/movie/top_rated', { language:'es-ES', page:2 }),
+    tmdb('/movie/popular', { language:apiLang(), page:1 }),
+    tmdb('/movie/popular', { language:apiLang(), page:2 }),
+    tmdb('/movie/popular', { language:apiLang(), page:3 }),
+    tmdb('/movie/top_rated', { language:apiLang(), page:1 }),
+    tmdb('/movie/top_rated', { language:apiLang(), page:2 }),
   ]);
   const merged = [...(pop1.results||[]), ...(pop2.results||[]), ...(pop3.results||[]), ...(top1.results||[]), ...(top2.results||[])].map(m => ({ ...m, media_type: 'movie' }));
   const seen = new Set();
@@ -1390,8 +1464,8 @@ function renderQuizMovies(){
 
 async function ensureQuizActorPool(){
   const [p1, p2] = await Promise.all([
-    tmdb('/person/popular', { language:'es-ES', page:1 }),
-    tmdb('/person/popular', { language:'es-ES', page:2 }),
+    tmdb('/person/popular', { language:apiLang(), page:1 }),
+    tmdb('/person/popular', { language:apiLang(), page:2 }),
   ]);
   const merged = [...(p1.results||[]), ...(p2.results||[])];
   const seen = new Set();
@@ -1463,6 +1537,18 @@ function renderSwipe(){
   });
   wrap.appendChild(typeTabs);
 
+  const moodRow = el('div','mood-row');
+  Object.entries(MOODS).forEach(([key,cfg]) => {
+    const chip = el('div','mood-chip' + (state.activeMood===key ? ' active' : ''), cfg.label);
+    chip.onclick = async () => {
+      state.activeMood = state.activeMood === key ? null : key;
+      state.batch = []; state.batchSeen[state.mediaType] = new Set();
+      await goToSwipe();
+    };
+    moodRow.appendChild(chip);
+  });
+  wrap.appendChild(moodRow);
+
   if(!state.batch.length && state.queueLoading){
     setBackdrop(null);
     wrap.appendChild(el('div','empty-state', `<div class="display">Buscando para ti...</div><p>Comprobando disponibilidad real en tus plataformas.</p>`));
@@ -1519,7 +1605,9 @@ function renderSwipe(){
       `;
       renderPlatformDots(tile.querySelector('[data-platform]'), m.id, m.media_type);
       tile.querySelector('.tile-poster-wrap').onclick = () => openDetail(m);
+      a11yButton(tile.querySelector('.tile-poster-wrap'), `Ver ficha de ${titleOf(m)}`);
       tile.querySelector('[data-info]').onclick = (e) => { e.stopPropagation(); openDetail(m); };
+      a11yButton(tile.querySelector('[data-info]'), 'Más información');
       tile.querySelector('[data-heart]').onclick = (e) => {
         e.stopPropagation();
         if(state.liked.some(x => x.id === m.id)){
@@ -1530,6 +1618,7 @@ function renderSwipe(){
         }
         render();
       };
+      a11yButton(tile.querySelector('[data-heart]'), 'Me gusta');
       tile.querySelector('[data-nope]').onclick = (e) => {
         e.stopPropagation();
         registerDecision(m, 'dislike');
@@ -1537,6 +1626,7 @@ function renderSwipe(){
         state.batchSeen[state.mediaType].add(m.id);
         render();
       };
+      a11yButton(tile.querySelector('[data-nope]'), 'No me gusta');
       grid.appendChild(tile);
     });
     wrap.appendChild(grid);
@@ -1571,7 +1661,7 @@ async function openDetail(movie){
 
   try{
     const [data, trailer] = await Promise.all([
-      tmdb(cfg.detail(movie.id), { language: 'es-ES', append_to_response: 'credits,recommendations' }),
+      tmdb(cfg.detail(movie.id), { language: apiLang(), append_to_response: 'credits,recommendations' }),
       findTrailer(movie.id, type),
       fetchProviders(movie.id, type)
     ]);
@@ -1647,6 +1737,7 @@ const TOP_SORTS = [
   { key:'recent', label:'Más recientes', sortBy:'primary_release_date.desc', minVotes:20 },
   { key:'voted', label:'Más votadas', sortBy:'vote_count.desc', minVotes:1 },
   { key:'trending', label:'Tendencia semanal', trending:true },
+  { key:'upcoming', label:'Próximos estrenos', upcoming:true },
 ];
 
 async function renderTop(){
@@ -1684,29 +1775,34 @@ async function renderTop(){
   wrap.appendChild(platRow);
 
   const activeSort = TOP_SORTS.find(s => s.key === filters.sortKey);
-  wrap.appendChild(el('p','lead', activeSort.trending ? 'Lo más visto esta semana que ya está en streaming en algún sitio (no solo tus plataformas) — sin contar lo que aún está solo en cines.' : `${activeSort.label}, disponibles en las plataformas marcadas arriba.`));
+  const leadText = activeSort.trending
+    ? 'Lo más visto esta semana que ya está en streaming en algún sitio (no solo tus plataformas) — sin contar lo que aún está solo en cines.'
+    : activeSort.upcoming
+      ? 'Lo que se estrena próximamente en cines — todavía no en streaming, pero para tenerlo en el radar.'
+      : `${activeSort.label}, disponibles en las plataformas marcadas arriba.`;
+  wrap.appendChild(el('p','lead', leadText));
 
   const listWrap = el('div');
   wrap.appendChild(listWrap);
   app.appendChild(wrap);
   appendBottomNav('top');
 
-  if(!filters.platforms.length && !activeSort.trending){
+  if(!filters.platforms.length && !activeSort.trending && !activeSort.upcoming){
     listWrap.appendChild(el('div','empty-mini','Marca al menos una plataforma arriba para ver resultados.'));
     return;
   }
 
   if(!state.topCache) state.topCache = {};
   const cacheKey = `${filters.sortKey}:${filters.platforms.slice().sort().join(',')}`;
-  if(state.topCache[cacheKey]){ paintTopList(listWrap, state.topCache[cacheKey]); return; }
+  if(state.topCache[cacheKey]){ paintTopList(listWrap, state.topCache[cacheKey], activeSort.upcoming); return; }
 
   listWrap.appendChild(el('p','lead','Cargando...'));
   try{
     let results;
     if(activeSort.trending){
       const [d1, d2] = await Promise.all([
-        tmdb('/trending/movie/week', { language: 'es-ES', page: 1 }),
-        tmdb('/trending/movie/week', { language: 'es-ES', page: 2 })
+        tmdb('/trending/movie/week', { language: apiLang(), page: 1 }),
+        tmdb('/trending/movie/week', { language: apiLang(), page: 2 })
       ]);
       const raw = [...(d1.results||[]), ...(d2.results||[])].filter(m=>m.poster_path).map(m => ({ ...m, media_type: 'movie' }));
       // descartamos las que aún están solo en cines y no tienen streaming en ningún sitio todavía
@@ -1715,6 +1811,10 @@ async function renderTop(){
         return providers.length ? m : null;
       }));
       results = checked.filter(Boolean);
+    } else if(activeSort.upcoming){
+      const data = await tmdb('/movie/upcoming', { language: apiLang(), region: state.region, page: 1 });
+      results = (data.results||[]).filter(m=>m.poster_path).map(m => ({ ...m, media_type: 'movie' }))
+        .sort((a,b) => (a.release_date||'').localeCompare(b.release_date||''));
     } else {
       const providerIds = filters.platforms.map(p => state.providerIds[p]).filter(Boolean);
       results = await fetchDiscoverPage(1, { sortBy: activeSort.sortBy, minVotes: activeSort.minVotes, mediaType: 'movie', watchProviderIds: providerIds });
@@ -1722,29 +1822,32 @@ async function renderTop(){
     }
     state.topCache[cacheKey] = results.slice(0, 20);
     listWrap.innerHTML = '';
-    paintTopList(listWrap, state.topCache[cacheKey]);
+    paintTopList(listWrap, state.topCache[cacheKey], activeSort.upcoming);
   }catch(e){
     listWrap.innerHTML = `<p class="lead">No se ha podido cargar el ranking.</p>`;
   }
 }
-function paintTopList(container, list){
+function paintTopList(container, list, upcoming){
   container.innerHTML = '';
   if(!list || !list.length){ container.appendChild(el('div','empty-mini','No hay resultados con tus plataformas actuales.')); return; }
   list.forEach((m, i) => {
     const row = el('div','list-row');
+    const dateStr = m.release_date ? new Date(m.release_date + 'T00:00:00').toLocaleDateString(apiLang(), { day:'numeric', month:'short', year:'numeric' }) : '';
     row.innerHTML = `
       <div class="list-rank">${i+1}</div>
       <img class="list-poster" src="${posterUrl(m.poster_path,'w154')}">
       <div class="list-info">
         <div class="t">${m.title}</div>
-        <div class="m">${(m.release_date||'').slice(0,4)} · ${(m.genre_ids||[]).slice(0,2).map(g=>genreMapFor('movie')[g]).filter(Boolean).join(', ')}</div>
-        <div style="display:flex; gap:4px; margin-top:4px;" data-providers></div>
+        <div class="m">${(m.genre_ids||[]).slice(0,2).map(g=>genreMapFor('movie')[g]).filter(Boolean).join(', ')}</div>
+        ${upcoming
+          ? `<div class="genre-pill" style="margin-top:4px; display:inline-block;">📅 ${dateStr}</div>`
+          : `<div style="display:flex; gap:4px; margin-top:4px;" data-providers></div>`}
       </div>
       <div class="list-score">★ ${m.vote_average ? m.vote_average.toFixed(1) : '—'}</div>
     `;
     row.onclick = () => openDetail(m);
     container.appendChild(row);
-    renderProviderChips(row.querySelector('[data-providers]'), m.id, m.media_type || 'movie', state.topFilters ? state.topFilters.platforms : null);
+    if(!upcoming){ renderProviderChips(row.querySelector('[data-providers]'), m.id, m.media_type || 'movie', state.topFilters ? state.topFilters.platforms : null); }
   });
 }
 
@@ -1755,7 +1858,7 @@ async function performSearch(query){
   state.searchLoading = true;
   render();
   try{
-    const data = await tmdb('/search/multi', { query, language: 'es-ES', include_adult: 'false' });
+    const data = await tmdb('/search/multi', { query, language: apiLang(), include_adult: 'false' });
     state.searchResults = (data.results||[]).filter(m => (m.media_type === 'movie' || m.media_type === 'tv') && m.poster_path);
   }catch(e){ state.searchResults = []; }
   state.searchLoading = false;
@@ -1977,7 +2080,13 @@ function renderMyList(){
 function appendBottomNav(active){
   const nav = el('div','bottom-nav');
   const inner = el('div','bottom-nav-inner');
-  const items = [
+  const items = state.lang === 'en' ? [
+    { key: 'swipe', icon: '🎬', label: 'Discover' },
+    { key: 'search', icon: '🔍', label: 'Search' },
+    { key: 'top', icon: '★', label: 'Top' },
+    { key: 'games', icon: '🎮', label: 'Games' },
+    { key: 'mylist', icon: '☰', label: 'My list' }
+  ] : [
     { key: 'swipe', icon: '🎬', label: 'Descubrir' },
     { key: 'search', icon: '🔍', label: 'Buscar' },
     { key: 'top', icon: '★', label: 'Top' },
@@ -1992,6 +2101,7 @@ function appendBottomNav(active){
       state.screen = it.key;
       render();
     };
+    a11yButton(btn, it.label);
     inner.appendChild(btn);
   });
   nav.appendChild(inner);
@@ -2002,26 +2112,26 @@ function appendBottomNav(active){
 const DUEL_METRICS = [
   { key:'popularity', label:'¿Cuál es más popular?', needsDetail:false, format:v=>Math.round(v), better:(a,b)=>a>b },
   { key:'vote_average', label:'¿Cuál tiene mejor nota?', needsDetail:false, format:v=>(v||0).toFixed(1), better:(a,b)=>a>b },
-  { key:'vote_count', label:'¿Cuál recibió más votos?', needsDetail:false, format:v=>(v||0).toLocaleString('es-ES'), better:(a,b)=>a>b },
+  { key:'vote_count', label:'¿Cuál recibió más votos?', needsDetail:false, format:v=>(v||0).toLocaleString(apiLang()), better:(a,b)=>a>b },
   { key:'release_date', label:'¿Cuál es más antigua?', needsDetail:false, format:v=>v?v.slice(0,4):'?', better:(a,b)=>a<b },
   { key:'runtime', label:'¿Cuál dura más?', needsDetail:true, format:v=>v?v+' min':'—', better:(a,b)=>a>b },
-  { key:'budget', label:'¿Cuál costó más producir?', needsDetail:true, format:v=>v?'$'+v.toLocaleString('es-ES'):'Sin datos', better:(a,b)=>a>b },
-  { key:'revenue', label:'¿Cuál recaudó más dinero?', needsDetail:true, format:v=>v?'$'+v.toLocaleString('es-ES'):'Sin datos', better:(a,b)=>a>b },
+  { key:'budget', label:'¿Cuál costó más producir?', needsDetail:true, format:v=>v?'$'+v.toLocaleString(apiLang()):'Sin datos', better:(a,b)=>a>b },
+  { key:'revenue', label:'¿Cuál recaudó más dinero?', needsDetail:true, format:v=>v?'$'+v.toLocaleString(apiLang()):'Sin datos', better:(a,b)=>a>b },
 ];
 
 async function ensureGamePool(){
   if(state.gamePool && state.gamePool.length >= 30) return;
   const [p1, p2] = await Promise.all([
-    tmdb('/movie/popular', { language:'es-ES', page:1 }),
-    tmdb('/movie/popular', { language:'es-ES', page:2 })
+    tmdb('/movie/popular', { language:apiLang(), page:1 }),
+    tmdb('/movie/popular', { language:apiLang(), page:2 })
   ]);
   state.gamePool = [...(p1.results||[]), ...(p2.results||[])].filter(m=>m.poster_path);
 }
 async function ensurePeoplePool(){
   if(state.peoplePool && state.peoplePool.length >= 30) return;
   const [p1, p2] = await Promise.all([
-    tmdb('/person/popular', { language:'es-ES', page:1 }),
-    tmdb('/person/popular', { language:'es-ES', page:2 })
+    tmdb('/person/popular', { language:apiLang(), page:1 }),
+    tmdb('/person/popular', { language:apiLang(), page:2 })
   ]);
   state.peoplePool = [...(p1.results||[]), ...(p2.results||[])].filter(p=>p.profile_path);
 }
@@ -2084,7 +2194,7 @@ async function startDuel(){
     let [a,b] = pickTwoDistinct(state.gamePool);
     const metric = DUEL_METRICS[Math.floor(Math.random()*DUEL_METRICS.length)];
     if(metric.needsDetail){
-      const [da,db] = await Promise.all([ tmdb(`/movie/${a.id}`,{language:'es-ES'}), tmdb(`/movie/${b.id}`,{language:'es-ES'}) ]);
+      const [da,db] = await Promise.all([ tmdb(`/movie/${a.id}`,{language:apiLang()}), tmdb(`/movie/${b.id}`,{language:apiLang()}) ]);
       a = { ...a, ...da }; b = { ...b, ...db };
     }
     state.duel = { a, b, metric, answered:false };
@@ -2295,7 +2405,7 @@ async function framedSearch(query){
   fg.query = query;
   if(query.trim().length < 2){ fg.results = []; render(); return; }
   try{
-    const data = await tmdb('/search/movie', { query, language:'es-ES' });
+    const data = await tmdb('/search/movie', { query, language:apiLang() });
     fg.results = (data.results||[]).slice(0,5);
   }catch(e){ fg.results = []; }
   render();
