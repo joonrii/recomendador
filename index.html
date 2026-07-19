@@ -623,6 +623,12 @@ let state = {
   searchQuery: '',
   searchResults: [],
   searchLoading: false,
+  roomId: null,
+  roomPool: [],
+  roomLikes: [],
+  roomLoading: false,
+  participantId: null,
+  participantName: '',
   user: null,
   authBusy: false,
   authMessage: '',
@@ -718,6 +724,112 @@ async function signOut(){
   state.user = null;
   render();
 }
+/* ---------- decidir en grupo: salas compartidas con coincidencias en directo ---------- */
+function ensureParticipant(){
+  let pid = storeGet('participantId');
+  if(!pid){ pid = 'p_' + Math.random().toString(36).slice(2, 10); storeSet('participantId', pid); }
+  state.participantId = pid;
+  state.participantName = storeGet('participantName') || '';
+}
+function setParticipantName(name){
+  state.participantName = name;
+  storeSet('participantName', name);
+}
+
+async function buildRoomPool(){
+  const providerIds = selectedProviderIds();
+  const seen = new Set();
+  const pool = [];
+  let page = 1, guard = 0;
+  while(pool.length < 18 && guard < 8){
+    guard++;
+    const results = await fetchDiscoverPage(page, { sortBy: 'popularity.desc', minVotes: 200, watchProviderIds: providerIds, mediaType: 'movie' });
+    page++;
+    const candidates = results.filter(m => !seen.has(m.id) && m.poster_path);
+    candidates.forEach(m => seen.add(m.id));
+    const checked = await Promise.all(candidates.map(async m => {
+      const providers = await fetchProviders(m.id, 'movie');
+      return matchOwnedPlatforms(providers, state.platforms).length ? m : null;
+    }));
+    pool.push(...checked.filter(Boolean));
+    if(results.length === 0) break;
+  }
+  return pool.slice(0, 18).map(m => ({ id: m.id, title: m.title, poster_path: m.poster_path, vote_average: m.vote_average, media_type: 'movie' }));
+}
+
+async function createRoom(){
+  if(!sb){ state.roomError = 'Las salas necesitan conexión, inténtalo de nuevo en un momento.'; render(); return; }
+  if(!state.platforms.length){ state.roomError = 'Marca al menos una plataforma antes de crear una sala.'; render(); return; }
+  state.roomLoading = true; render();
+  ensureParticipant();
+  const pool = await buildRoomPool();
+  const id = Math.random().toString(36).slice(2, 8);
+  await sb.from('rooms').insert({ id, platforms: state.platforms, media_type: 'movie', pool });
+  await joinRoom(id);
+}
+
+async function joinRoom(id){
+  if(!sb) return;
+  state.roomLoading = true; render();
+  ensureParticipant();
+  const { data: room } = await sb.from('rooms').select('*').eq('id', id).maybeSingle();
+  if(!room){ state.roomLoading = false; state.roomError = 'No existe esa sala (o ha caducado).'; render(); return; }
+  state.roomId = id;
+  state.roomPool = room.pool || [];
+  const { data: likes } = await sb.from('room_likes').select('*').eq('room_id', id);
+  state.roomLikes = likes || [];
+  state.roomLoading = false;
+  state.roomError = '';
+  render();
+  subscribeToRoom(id);
+  // dejamos el código en la URL para que compartir el enlace tal cual funcione
+  try{ history.replaceState(null, '', '?room=' + id); }catch(e){}
+}
+
+let roomChannel = null;
+function subscribeToRoom(id){
+  if(!sb) return;
+  if(roomChannel){ sb.removeChannel(roomChannel); }
+  roomChannel = sb.channel('room-' + id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_likes', filter: `room_id=eq.${id}` }, (payload) => {
+      if(payload.eventType === 'INSERT'){ state.roomLikes.push(payload.new); }
+      else if(payload.eventType === 'DELETE'){ state.roomLikes = state.roomLikes.filter(l => !(l.participant_id === payload.old.participant_id && l.movie_id === payload.old.movie_id)); }
+      if(state.screen === 'group') render();
+    })
+    .subscribe();
+}
+
+function leaveRoom(){
+  if(roomChannel && sb){ sb.removeChannel(roomChannel); roomChannel = null; }
+  state.roomId = null; state.roomPool = []; state.roomLikes = [];
+  try{ history.replaceState(null, '', window.location.pathname); }catch(e){}
+  render();
+}
+
+async function toggleRoomLike(movie){
+  if(!sb || !state.roomId) return;
+  const mine = state.roomLikes.some(l => l.participant_id === state.participantId && l.movie_id === movie.id);
+  if(mine){
+    state.roomLikes = state.roomLikes.filter(l => !(l.participant_id === state.participantId && l.movie_id === movie.id));
+    render();
+    await sb.from('room_likes').delete().eq('room_id', state.roomId).eq('participant_id', state.participantId).eq('movie_id', movie.id);
+  } else {
+    const row = { room_id: state.roomId, participant_id: state.participantId, participant_name: state.participantName || 'Alguien', movie_id: movie.id, title: movie.title, poster_path: movie.poster_path, vote_average: movie.vote_average };
+    state.roomLikes.push(row);
+    render();
+    await sb.from('room_likes').insert(row);
+  }
+}
+
+function roomMatches(){
+  const byMovie = {};
+  state.roomLikes.forEach(l => {
+    if(!byMovie[l.movie_id]) byMovie[l.movie_id] = { movie: l, participants: new Set() };
+    byMovie[l.movie_id].participants.add(l.participant_id);
+  });
+  return Object.values(byMovie).filter(x => x.participants.size >= 2);
+}
+
 async function initAuth(){
   if(!sb) return;
   const { data } = await sb.auth.getSession();
@@ -1245,6 +1357,7 @@ function renderScreen(){
   if(state.screen === 'swipe') return renderSwipe();
   if(state.screen === 'top') return renderTop();
   if(state.screen === 'search') return renderSearch();
+  if(state.screen === 'group') return renderGroup();
   if(state.screen === 'games') return renderGames();
   if(state.screen === 'mylist') return renderMyList();
 }
@@ -1865,6 +1978,103 @@ async function performSearch(query){
   render();
 }
 
+function renderGroup(){
+  app.innerHTML = '';
+  const wrap = el('div');
+  wrap.appendChild(el('div','marquee', `<div class="display marquee-title" style="font-size:24px;">Grupo</div>`));
+
+  if(state.roomLoading){
+    wrap.appendChild(el('p','lead','Un momento...'));
+    app.appendChild(wrap); appendBottomNav('group'); return;
+  }
+
+  if(!state.roomId){
+    wrap.appendChild(el('p','lead','Decide qué ver con alguien más: crea una sala, comparte el enlace, y cuando los dos deis ♥ a la misma peli, aparece como coincidencia al momento.'));
+    if(state.roomError){ const err = el('p','lead', state.roomError); err.style.color = 'var(--red)'; wrap.appendChild(err); }
+
+    const nameWrap = el('div');
+    nameWrap.style.marginBottom = '14px';
+    nameWrap.appendChild(el('label','field-label','Tu nombre (lo verán los demás en la sala)'));
+    const nameInput = el('input');
+    nameInput.type = 'text'; nameInput.placeholder = 'Ej. Marta'; nameInput.value = state.participantName;
+    nameInput.dataset.focusId = 'participant-name';
+    nameInput.oninput = (e) => setParticipantName(e.target.value);
+    nameWrap.appendChild(nameInput);
+    wrap.appendChild(nameWrap);
+
+    const createBtn = el('button','btn','Crear una sala nueva');
+    createBtn.onclick = () => createRoom();
+    wrap.appendChild(createBtn);
+
+    wrap.appendChild(el('div','field-label','o únete con un código'));
+    const joinRow = el('div');
+    joinRow.style.cssText = 'display:flex; gap:8px;';
+    const codeInput = el('input');
+    codeInput.type = 'text'; codeInput.placeholder = 'código de sala';
+    codeInput.dataset.focusId = 'room-code';
+    joinRow.appendChild(codeInput);
+    const joinBtn = el('button','btn ghost small-btn','Unirme');
+    joinBtn.onclick = () => { const v = codeInput.value.trim(); if(v) joinRoom(v); };
+    joinRow.appendChild(joinBtn);
+    wrap.appendChild(joinRow);
+  } else {
+    const shareUrl = window.location.origin + window.location.pathname + '?room=' + state.roomId;
+    const shareBox = el('div','account-box');
+    shareBox.innerHTML = `
+      <div class="account-label">Código de sala: ${state.roomId}</div>
+      <p class="account-note">Comparte este enlace para que se unan:</p>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input type="text" readonly value="${shareUrl}" style="flex:1; background:var(--surface-2); border:1px solid var(--border); color:var(--text-muted); padding:9px 10px; border-radius:8px; font-size:11px;">
+        <button class="btn ghost small-btn" data-copy>Copiar</button>
+      </div>
+      <button class="btn ghost small-btn" data-leave style="margin-top:10px;">Salir de la sala</button>
+    `;
+    shareBox.querySelector('[data-copy]').onclick = (e) => { navigator.clipboard.writeText(shareUrl); e.target.textContent = '¡Copiado!'; };
+    shareBox.querySelector('[data-leave]').onclick = () => leaveRoom();
+    wrap.appendChild(shareBox);
+
+    const matches = roomMatches();
+    if(matches.length){
+      wrap.appendChild(el('label','field-label',`🎉 Coincidencias (${matches.length})`));
+      const matchGrid = el('div','select-grid reason-grid');
+      matches.forEach(({movie}) => {
+        const tile = el('div','select-tile reason-tile liked');
+        tile.innerHTML = `<img src="${posterUrl(movie.poster_path,'w300')}"><div class="tile-footer"><div class="tile-title">${movie.title}</div></div>`;
+        matchGrid.appendChild(tile);
+      });
+      wrap.appendChild(matchGrid);
+    }
+
+    wrap.appendChild(el('label','field-label','Da ♥ a lo que te apetezca'));
+    const grid = el('div','select-grid reason-grid');
+    state.roomPool.forEach(m => {
+      const mine = state.roomLikes.some(l => l.participant_id === state.participantId && l.movie_id === m.id);
+      const others = new Set(state.roomLikes.filter(l => l.movie_id === m.id && l.participant_id !== state.participantId).map(l=>l.participant_name));
+      const tile = el('div','select-tile reason-tile' + (mine ? ' liked' : ''));
+      tile.innerHTML = `
+        <div class="tile-poster-wrap" data-info>
+          <img src="${posterUrl(m.poster_path,'w300')}">
+          ${m.vote_average ? `<div class="tile-rating">★ ${m.vote_average.toFixed(1)}</div>` : ''}
+          <div class="tile-heart" data-heart>${mine ? '♥' : '♡'}</div>
+        </div>
+        <div class="tile-footer">
+          <div class="tile-title">${m.title}</div>
+          ${others.size ? `<div class="tile-reason">${[...others].join(', ')} también le dio ♥</div>` : ''}
+        </div>
+      `;
+      tile.querySelector('[data-info]').onclick = () => openDetail(m);
+      a11yButton(tile.querySelector('[data-info]'), `Ver ficha de ${m.title}`);
+      tile.querySelector('[data-heart]').onclick = (e) => { e.stopPropagation(); toggleRoomLike(m); };
+      a11yButton(tile.querySelector('[data-heart]'), 'Me gusta');
+      grid.appendChild(tile);
+    });
+    wrap.appendChild(grid);
+  }
+
+  app.appendChild(wrap);
+  appendBottomNav('group');
+}
+
 function renderSearch(){
   app.innerHTML = '';
   const wrap = el('div');
@@ -2083,12 +2293,14 @@ function appendBottomNav(active){
   const items = state.lang === 'en' ? [
     { key: 'swipe', icon: '🎬', label: 'Discover' },
     { key: 'search', icon: '🔍', label: 'Search' },
+    { key: 'group', icon: '👥', label: 'Group' },
     { key: 'top', icon: '★', label: 'Top' },
     { key: 'games', icon: '🎮', label: 'Games' },
     { key: 'mylist', icon: '☰', label: 'My list' }
   ] : [
     { key: 'swipe', icon: '🎬', label: 'Descubrir' },
     { key: 'search', icon: '🔍', label: 'Buscar' },
+    { key: 'group', icon: '👥', label: 'Grupo' },
     { key: 'top', icon: '★', label: 'Top' },
     { key: 'games', icon: '🎮', label: 'Retos' },
     { key: 'mylist', icon: '☰', label: 'Mi lista' }
@@ -2548,6 +2760,13 @@ async function init(){
   catch(e){
     state.error = e.kind === 'network' ? 'No se ha podido conectar con el servidor (o ha tardado demasiado). Comprueba tu conexión e inténtalo de nuevo.' : 'Ha ocurrido un problema al cargar los datos. Inténtalo de nuevo en unos segundos.';
     state.screen = 'startup-error'; render(); return;
+  }
+  const roomParam = new URLSearchParams(window.location.search).get('room');
+  if(roomParam){
+    state.screen = 'group';
+    render();
+    await joinRoom(roomParam);
+    return;
   }
   if(!state.platforms.length){
     state.screen = 'landing';
