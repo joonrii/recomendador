@@ -763,8 +763,18 @@ async function createRoom(){
   state.roomLoading = true; render();
   ensureParticipant();
   const pool = await buildRoomPool();
+  if(!pool.length){
+    state.roomLoading = false;
+    state.roomError = 'No hemos encontrado películas para tus plataformas ahora mismo, prueba de nuevo.';
+    render(); return;
+  }
   const id = Math.random().toString(36).slice(2, 8);
-  await sb.from('rooms').insert({ id, platforms: state.platforms, media_type: 'movie', pool });
+  const { error } = await sb.from('rooms').insert({ id, platforms: state.platforms, media_type: 'movie', pool });
+  if(error){
+    state.roomLoading = false;
+    state.roomError = 'No se ha podido crear la sala: ' + error.message;
+    render(); return;
+  }
   await joinRoom(id);
 }
 
